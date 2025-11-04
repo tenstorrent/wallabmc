@@ -131,3 +131,83 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
 }
 
 SHELL_CMD_REGISTER(reset, NULL, "Reset.", cmd_reset);
+
+/* LED control */
+static const struct gpio_dt_spec gpio_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
+static const struct gpio_dt_spec gpio_led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
+static const struct gpio_dt_spec gpio_led2 = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
+
+int led_init(void)
+{
+	int ret;
+
+	/* Initialize LED0 */
+	if (gpio_is_ready_dt(&gpio_led0)) {
+		ret = gpio_pin_configure_dt(&gpio_led0, GPIO_OUTPUT_INACTIVE);
+		if (ret < 0) {
+			printf("Could not configure LED0 GPIO\n");
+			return -1;
+		}
+	} else {
+		printf("LED0 GPIO not ready\n");
+		return -1;
+	}
+
+	/* Initialize LED1 */
+	if (gpio_is_ready_dt(&gpio_led1)) {
+		ret = gpio_pin_configure_dt(&gpio_led1, GPIO_OUTPUT_INACTIVE);
+		if (ret < 0) {
+			printf("Could not configure LED1 GPIO\n");
+			return -1;
+		}
+	} else {
+		printf("LED1 GPIO not ready\n");
+		return -1;
+	}
+
+	/* Initialize LED2 */
+	if (gpio_is_ready_dt(&gpio_led2)) {
+		ret = gpio_pin_configure_dt(&gpio_led2, GPIO_OUTPUT_INACTIVE);
+		if (ret < 0) {
+			printf("Could not configure LED2 GPIO\n");
+			return -1;
+		}
+	} else {
+		printf("LED2 GPIO not ready\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int cmd_led_toggle(const struct shell *sh, size_t argc, char **argv)
+{
+	int ret;
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	/* Toggle LED0 */
+	ret = gpio_pin_toggle_dt(&gpio_led0);
+	if (ret < 0) {
+		shell_error(sh, "Could not toggle LED0");
+		return -1;
+	}
+
+	/* Toggle LED1 */
+	ret = gpio_pin_toggle_dt(&gpio_led1);
+	if (ret < 0) {
+		shell_error(sh, "Could not toggle LED1");
+		return -1;
+	}
+
+	/* Toggle LED2 */
+	ret = gpio_pin_toggle_dt(&gpio_led2);
+	if (ret < 0) {
+		shell_error(sh, "Could not toggle LED2");
+		return -1;
+	}
+
+	return 0;
+}
+
+SHELL_CMD_REGISTER(led_toggle, NULL, "Toggle LEDs on led0, led1, and led2.", cmd_led_toggle);
