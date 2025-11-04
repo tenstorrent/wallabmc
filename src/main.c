@@ -13,6 +13,7 @@ int main(void)
 {
 	power_init();
 	reset_init();
+	led_init();
 
 	return 0;
 }
