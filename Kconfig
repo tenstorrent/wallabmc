@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config JTAG_DAEMON_STACK_SIZE
+	int "JTAG daemon stack size"
+	default 1024
+
+config JTAG_DAEMON_PRIORITY
+	int "JTAG daemon priority"
+	default 5
+
+source "Kconfig.zephyr"
