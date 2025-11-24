@@ -137,6 +137,63 @@ static const struct gpio_dt_spec gpio_led0 = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gp
 static const struct gpio_dt_spec gpio_led1 = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
 static const struct gpio_dt_spec gpio_led2 = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
 
+/* LED blinking thread */
+#define LED_BLINK_STACK_SIZE 256
+#define LED_BLINK_PRIORITY   (CONFIG_NUM_PREEMPT_PRIORITIES - 1)
+#define LED_BLINK_PERIOD_DOT    250
+#define LED_BLINK_PERIOD_DASH   (3 * LED_BLINK_PERIOD_DOT)
+#define LED_BLINK_PERIOD_PAUSE  (LED_BLINK_PERIOD_DOT)
+#define LED_BLINK_PERIOD_LETTER (3 * LED_BLINK_PERIOD_DOT)
+#define LED_BLINK_PERIOD_WORD   (7 * LED_BLINK_PERIOD_DOT)
+
+static K_KERNEL_STACK_DEFINE(led_blink_stack, LED_BLINK_STACK_SIZE);
+static struct k_thread led_blink_thread_data;
+
+static void led_dash(void)
+{
+	gpio_pin_set_dt(&gpio_led1, 1);
+	k_msleep(LED_BLINK_PERIOD_DASH);
+	gpio_pin_set_dt(&gpio_led1, 0);
+	k_msleep(LED_BLINK_PERIOD_PAUSE);
+}
+
+static void led_dot(void)
+{
+	gpio_pin_set_dt(&gpio_led1, 1);
+	k_msleep(LED_BLINK_PERIOD_DOT);
+	gpio_pin_set_dt(&gpio_led1, 0);
+	k_msleep(LED_BLINK_PERIOD_PAUSE);
+}
+
+static void led_blink_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+
+	if (!gpio_is_ready_dt(&gpio_led1)) {
+		return;
+	}
+
+	// Flash OK in morse code: - - -   - . -
+	while (1) {
+		// O
+		led_dash();
+		led_dash();
+		led_dash();
+
+		k_msleep(LED_BLINK_PERIOD_LETTER);
+
+		// K
+		led_dash();
+		led_dot();
+		led_dash();
+
+		// Pause
+		k_msleep(LED_BLINK_PERIOD_WORD);
+	}
+}
+
 int led_init(void)
 {
 	int ret;
@@ -177,6 +234,13 @@ int led_init(void)
 		return -1;
 	}
 
+	k_thread_create(&led_blink_thread_data, led_blink_stack,
+			K_THREAD_STACK_SIZEOF(led_blink_stack),
+			led_blink_thread,
+			NULL, NULL, NULL,
+			LED_BLINK_PRIORITY, 0, K_NO_WAIT);
+	k_thread_name_set(&led_blink_thread_data, "led_blink");
+
 	return 0;
 }
 
@@ -193,13 +257,6 @@ static int cmd_led_toggle(const struct shell *sh, size_t argc, char **argv)
 		return -1;
 	}
 
-	/* Toggle LED1 */
-	ret = gpio_pin_toggle_dt(&gpio_led1);
-	if (ret < 0) {
-		shell_error(sh, "Could not toggle LED1");
-		return -1;
-	}
-
 	/* Toggle LED2 */
 	ret = gpio_pin_toggle_dt(&gpio_led2);
 	if (ret < 0) {
@@ -210,4 +267,4 @@ static int cmd_led_toggle(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-SHELL_CMD_REGISTER(led_toggle, NULL, "Toggle LEDs on led0, led1, and led2.", cmd_led_toggle);
+SHELL_CMD_REGISTER(led_toggle, NULL, "Toggle LEDs on led0 and led2.", cmd_led_toggle);
