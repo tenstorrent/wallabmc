@@ -15,10 +15,25 @@ int main(void)
 {
 	LOG_INF("   Hostname: %s", net_hostname_get());
 
-	start_dhcp4();
-	power_init();
-	reset_init();
-	led_init();
+	if (start_dhcp4() < 0) {
+		LOG_ERR("DHCP4 init failed");
+		return -1;
+	}
+
+	if (power_init() < 0) {
+		LOG_ERR("Power init failed");
+		return -1;
+	}
+
+	if (reset_init() < 0) {
+		LOG_ERR("Reset init failed");
+		return -1;
+	}
+
+	if (led_init() < 0) {
+		LOG_ERR("LED init failed");
+		return -1;
+	}
 
 	return 0;
 }
