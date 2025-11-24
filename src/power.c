@@ -14,7 +14,7 @@
 LOG_MODULE_REGISTER(power_shell);
 
 #define GPIO_POWER DT_ALIAS(led0)
-#define GPIO_RESET DT_ALIAS(led1)
+#define GPIO_RESET DT_ALIAS(led2)
 
 static const struct gpio_dt_spec gpio_power = GPIO_DT_SPEC_GET(GPIO_POWER, gpios);
 
