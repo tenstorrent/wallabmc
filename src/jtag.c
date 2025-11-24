@@ -32,36 +32,63 @@ static const struct gpio_dt_spec tms = GPIO_DT_SPEC_GET(JTAG_TMS_NODE, gpios);
 static const struct gpio_dt_spec tdi = GPIO_DT_SPEC_GET(JTAG_TDI_NODE, gpios);
 static const struct gpio_dt_spec tdo = GPIO_DT_SPEC_GET(JTAG_TDO_NODE, gpios);
 
+static int tck_prev = -1;
 static inline void set_tck(int state)
 {
-	static int prev = -1;
-	if (prev != state) {
+	if (tck_prev != state) {
 		gpio_pin_set_dt(&tck, state);
-		prev = state;
+		tck_prev = state;
 	}
 }
 
+static int tms_prev = -1;
 static inline void set_tms(int state)
 {
-	static int prev = -1;
-	if (prev != state) {
+	if (tms_prev != state) {
 		gpio_pin_set_dt(&tms, state);
-		prev = state;
+		tms_prev = state;
 	}
 }
 
+static int tdi_prev = -1;
 static inline void set_tdi(int state)
 {
-	static int prev = -1;
-	if (prev != state) {
+	if (tdi_prev != state) {
 		gpio_pin_set_dt(&tdi, state);
-		prev = state;
+		tdi_prev = state;
 	}
 }
 
 static inline int get_tdo(void)
 {
 	return gpio_pin_get_dt(&tdo);
+}
+
+static void jtag_pins_disable(void)
+{
+	/* Make JTAG pins high impedance */
+	gpio_pin_configure_dt(&tck, GPIO_INPUT);
+	gpio_pin_configure_dt(&tms, GPIO_INPUT);
+	gpio_pin_configure_dt(&tdi, GPIO_INPUT);
+	gpio_pin_configure_dt(&tdo, GPIO_INPUT);
+
+	LOG_INF("JTAG GPIOs disabled");
+}
+
+static void jtag_pins_enable(void)
+{
+	/* Drive TCK, TDI low and TMS high */
+	gpio_pin_configure_dt(&tck, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&tms, GPIO_OUTPUT_ACTIVE);
+	gpio_pin_configure_dt(&tdi, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&tdo, GPIO_INPUT);
+
+	/* Reset cached pin states */
+	tck_prev = -1;
+	tms_prev = -1;
+	tdi_prev = -1;
+
+	LOG_INF("JTAG GPIOs enabled");
 }
 
 static int jtag_pins_init(void)
@@ -72,17 +99,9 @@ static int jtag_pins_init(void)
 		return -ENODEV;
 	}
 
-	/*
-	 * Drive TCK, TDI low and TMS high. If we decide not to put a mux
-	 * between the STM32 and the JTAG header, then we should make these
-	 * high impedence until we someone connects to the TCP port.
-	 */
-	gpio_pin_configure_dt(&tck, GPIO_OUTPUT_INACTIVE);
-	gpio_pin_configure_dt(&tms, GPIO_OUTPUT_ACTIVE);
-	gpio_pin_configure_dt(&tdi, GPIO_OUTPUT_INACTIVE);
-	gpio_pin_configure_dt(&tdo, GPIO_INPUT);
+	/* JTAG pins are high impedance until someone connects to the TCP port */
+	jtag_pins_disable();
 
-	LOG_INF("JTAG GPIOs initialized");
 	return 0;
 }
 
@@ -98,7 +117,10 @@ static void handle_client(int client_fd)
 
 	LOG_INF("Client connected, TCP_NODELAY enabled.");
 
-	while (true) {
+	jtag_pins_enable();
+
+	bool finished = false;
+	while (!finished) {
 		unsigned char cmd_buf;
 		int rc;
 
@@ -109,6 +131,7 @@ static void handle_client(int client_fd)
 			} else {
 				LOG_WRN("Client recv() error: %d", errno);
 			}
+			finished = true;
 			break;
 		}
 
@@ -147,6 +170,7 @@ static void handle_client(int client_fd)
 			rc = send(client_fd, &resp, 1, 0);
 			if (rc <= 0) {
 				LOG_WRN("Client send() error: %d", errno);
+				finished = true;
 			}
 			break;
 		}
@@ -154,7 +178,8 @@ static void handle_client(int client_fd)
 		/* Quit */
 		case 'Q':
 			LOG_INF("Received 'Q' (Quit) command.");
-			return; // Exit handle_client
+			finished = true;
+			break;
 
 		/* Reset */
 		case 'r':
@@ -179,11 +204,9 @@ static void handle_client(int client_fd)
 			LOG_WRN("Unknown command: 0x%02x", cmd_buf);
 			break; // Unknown command, don't disconnect
 		}
-
-		if (rc <= 0) {
-			break; // Error or disconnect from inner recv/send
-		}
 	}
+
+	jtag_pins_disable();
 }
 
 static void jtag_daemon_thread(void *a, void *b, void *c)
