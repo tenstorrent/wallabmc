@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 #include "power.h"
 #include "dhcp.h"
 #include "jtag.h"
+#include "redfish.h"
 
 int main(void)
 {
@@ -33,6 +34,11 @@ int main(void)
 
 	if (led_init() < 0) {
 		LOG_ERR("LED init failed");
+		return -1;
+	}
+
+	if (redfish_init() < 0) {
+		LOG_ERR("Redfish init failed");
 		return -1;
 	}
 
