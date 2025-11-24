@@ -23,20 +23,20 @@ int power_init(void)
 	int ret;
 
 	if (!gpio_is_ready_dt(&gpio_power)) {
-		printf("Power GPIO not ready\n");
+		LOG_INF("Power GPIO not ready\n");
 		return -1;
 	}
 
 	ret = gpio_pin_configure_dt(&gpio_power, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
-		printf("Could not configure power GPIO\n");
+		LOG_INF("Could not configure power GPIO\n");
 		return -1;
 	}
 
 	// Power on at BMC boot
 	ret = gpio_pin_set_dt(&gpio_power, 1);
 	if (ret < 0) {
-		printf("Could not toggle power GPIO\n");
+		LOG_INF("Could not toggle power GPIO\n");
 		return -1;
 	}
 
@@ -51,7 +51,7 @@ static int cmd_power_on(const struct shell *sh, size_t argc, char **argv)
 
 	ret = gpio_pin_set_dt(&gpio_power, 1);
 	if (ret < 0) {
-		printf("Could not toggle power GPIO\n");
+		LOG_INF("Could not toggle power GPIO\n");
 		return -1;
 	}
 
@@ -66,7 +66,7 @@ static int cmd_power_off(const struct shell *sh, size_t argc, char **argv)
 
 	ret = gpio_pin_set_dt(&gpio_power, 0);
 	if (ret < 0) {
-		printf("Could not toggle power GPIO\n");
+		LOG_INF("Could not toggle power GPIO\n");
 		return -1;
 	}
 
@@ -88,19 +88,19 @@ int reset_init(void)
 	int ret;
 
 	if (!gpio_is_ready_dt(&gpio_reset)) {
-		printf("Reset GPIO not ready\n");
+		LOG_INF("Reset GPIO not ready\n");
 		return -1;
 	}
 
 	ret = gpio_pin_configure_dt(&gpio_reset, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
-		printf("Could not configure reset GPIO\n");
+		LOG_INF("Could not configure reset GPIO\n");
 		return -1;
 	}
 
 	ret = gpio_pin_set_dt(&gpio_reset, 0);
 	if (ret < 0) {
-		printf("Could not toggle reset GPIO\n");
+		LOG_INF("Could not toggle reset GPIO\n");
 		return -1;
 	}
 
@@ -115,7 +115,7 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
 
 	ret = gpio_pin_set_dt(&gpio_reset, 1);
 	if (ret < 0) {
-		printf("Could not toggle RESET GPIO\n");
+		LOG_INF("Could not toggle RESET GPIO\n");
 		return -1;
 	}
 
@@ -123,7 +123,7 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
 
 	ret = gpio_pin_set_dt(&gpio_reset, 0);
 	if (ret < 0) {
-		printf("Could not toggle RESET GPIO\n");
+		LOG_INF("Could not toggle RESET GPIO\n");
 		return -1;
 	}
 
@@ -145,11 +145,11 @@ int led_init(void)
 	if (gpio_is_ready_dt(&gpio_led0)) {
 		ret = gpio_pin_configure_dt(&gpio_led0, GPIO_OUTPUT_INACTIVE);
 		if (ret < 0) {
-			printf("Could not configure LED0 GPIO\n");
+			LOG_INF("Could not configure LED0 GPIO\n");
 			return -1;
 		}
 	} else {
-		printf("LED0 GPIO not ready\n");
+		LOG_INF("LED0 GPIO not ready\n");
 		return -1;
 	}
 
@@ -157,11 +157,11 @@ int led_init(void)
 	if (gpio_is_ready_dt(&gpio_led1)) {
 		ret = gpio_pin_configure_dt(&gpio_led1, GPIO_OUTPUT_INACTIVE);
 		if (ret < 0) {
-			printf("Could not configure LED1 GPIO\n");
+			LOG_INF("Could not configure LED1 GPIO\n");
 			return -1;
 		}
 	} else {
-		printf("LED1 GPIO not ready\n");
+		LOG_INF("LED1 GPIO not ready\n");
 		return -1;
 	}
 
@@ -169,11 +169,11 @@ int led_init(void)
 	if (gpio_is_ready_dt(&gpio_led2)) {
 		ret = gpio_pin_configure_dt(&gpio_led2, GPIO_OUTPUT_INACTIVE);
 		if (ret < 0) {
-			printf("Could not configure LED2 GPIO\n");
+			LOG_INF("Could not configure LED2 GPIO\n");
 			return -1;
 		}
 	} else {
-		printf("LED2 GPIO not ready\n");
+		LOG_INF("LED2 GPIO not ready\n");
 		return -1;
 	}
 
