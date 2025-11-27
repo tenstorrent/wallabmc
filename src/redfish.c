@@ -17,18 +17,27 @@
 #include <stdio.h>
 #include "redfish.h"
 #include "certificate.h"
+#include "power.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
-
-static bool system_power_state = 0;
 
 static char serial_number[] = "12345";
 
 void set_power_state(bool on)
 {
-	system_power_state = on;
-	// IMPLEMENT
-	LOG_INF("System Power State changed to: %s", on ? "ON" : "OFF");
+	int ret;
+
+	if (on)
+		ret = power_on();
+	else
+		ret = power_off();
+
+	if (ret < 0) {
+		LOG_ERR("Failed to set power state: %d", ret);
+		return;
+	}
+
+	LOG_INF("System Power State changed to: %s", get_power_state() ? "ON" : "OFF");
 }
 
 struct redfish_reset_payload {
@@ -165,7 +174,7 @@ static int system_info_handler(struct http_client_ctx *client,
 			"    }\n"
 			"  }\n"
 			"}\n",
-			system_power_state ? "On" : "Off", serial_number
+			get_power_state() ? "On" : "Off", serial_number
 				);
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
