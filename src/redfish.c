@@ -1,10 +1,11 @@
 /*
  * Minimal Zephyr Redfish Implementation
- * Implements: ComputerSystem.Reset (On/ForceOff)
+ * Implements: ComputerSystem.Reset (On/ForceOff/PowerCycle)
  *
  * redfishtool Systems -r 192.168.2.55 -vvv -I system
  * redfishtool Systems -r 192.168.2.55 -vvv reset On
  * redfishtool Systems -r 192.168.2.55 -vvv reset ForceOff
+ * redfishtool Systems -r 192.168.2.55 -vvv reset PowerCycle
  */
 
 #include <zephyr/kernel.h>
@@ -169,7 +170,8 @@ static int system_info_handler(struct http_client_ctx *client,
 			"      \"target\": \"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset\",\n"
 			"      \"ResetType@Redfish.AllowableValues\": [\n"
 			"        \"On\",\n"
-			"        \"ForceOff\"\n"
+			"        \"ForceOff\",\n"
+			"        \"PowerCycle\"\n"
 			"      ]\n"
 			"    }\n"
 			"  }\n"
@@ -233,6 +235,9 @@ static int system_reset_handler(struct http_client_ctx *client,
 				response_ctx->status = HTTP_204_NO_CONTENT; // Standard Redfish success
 			} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
 				set_power_state(false);
+				response_ctx->status = HTTP_204_NO_CONTENT;
+			} else if (strcmp(payload.reset_type, "PowerCycle") == 0) {
+				power_reset();
 				response_ctx->status = HTTP_204_NO_CONTENT;
 			} else {
 				response_ctx->status = HTTP_400_BAD_REQUEST;
