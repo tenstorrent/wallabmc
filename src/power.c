@@ -139,11 +139,9 @@ int reset_init(void)
 	return 0;
 }
 
-static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
+int power_reset(void)
 {
 	int ret;
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
 
 	ret = gpio_pin_set_dt(&gpio_reset, 1);
 	if (ret < 0) {
@@ -160,6 +158,13 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	return 0;
+}
+
+static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	return power_reset();
 }
 
 SHELL_CMD_REGISTER(reset, NULL, "Reset.", cmd_reset);
