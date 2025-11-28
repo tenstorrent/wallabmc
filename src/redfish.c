@@ -41,6 +41,10 @@ void set_power_state(bool on)
 	LOG_INF("System Power State changed to: %s", get_power_state() ? "ON" : "OFF");
 }
 
+static const struct http_header json_header[] = {
+	{.name = "Content-Type", .value = "application/json"}
+};
+
 struct redfish_reset_payload {
 	const char *reset_type;
 };
@@ -255,6 +259,8 @@ static int redfish_version_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -304,6 +310,8 @@ static int service_root_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -352,6 +360,8 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -410,6 +420,8 @@ static int system_info_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
