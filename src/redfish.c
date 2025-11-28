@@ -50,6 +50,150 @@ static const struct json_obj_descr reset_descr[] = {
 				  reset_type, JSON_TOK_STRING)
 };
 
+/* Structures for JSON encoding */
+
+/* Service Root: Systems nested object */
+struct redfish_systems_ref {
+	const char *odata_id;
+};
+
+/* Service Root response */
+struct redfish_service_root {
+	const char *odata_type;
+	const char *odata_id;
+	const char *id;
+	const char *name;
+	const char *redfish_version;
+	const char *uuid;
+	struct redfish_systems_ref systems;
+};
+
+/* Systems Collection: Member object */
+struct redfish_system_member {
+	const char *odata_id;
+};
+
+/* Systems Collection response */
+struct redfish_systems_collection {
+	const char *odata_id;
+	const char *odata_type;
+	const char *name;
+	int32_t members_count;
+	struct redfish_system_member members[1];
+	size_t members_len;
+};
+
+/* System Info: ResetType array */
+struct redfish_reset_action {
+	const char *target;
+	const char *reset_type_values[3];
+	size_t reset_type_values_len;
+};
+
+/* System Info: Actions nested object */
+struct redfish_actions {
+	struct redfish_reset_action reset_action;
+};
+
+/* System Info response */
+struct redfish_computer_system {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *uuid;
+	const char *name;
+	const char *description;
+	const char *power_state;
+	const char *serial_number;
+	struct redfish_actions actions;
+};
+
+/* JSON descriptors for encoding */
+
+/* Service Root: Systems nested object descriptor */
+static const struct json_obj_descr systems_ref_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_ref, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+};
+
+/* Service Root descriptor */
+static const struct json_obj_descr service_root_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "RedfishVersion",
+				  redfish_version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "UUID",
+				  uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
+				    systems, systems_ref_descr),
+};
+
+/* Systems Collection: Member object descriptor */
+static const struct json_obj_descr system_member_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_member, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+};
+
+/* Systems Collection descriptor */
+static const struct json_obj_descr systems_collection_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection,
+				  "Members@odata.count", members_count,
+				  JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_systems_collection,
+				       "Members", members, 1,
+				       members_len, system_member_descr,
+				       ARRAY_SIZE(system_member_descr)),
+};
+
+/* System Info: Reset action descriptor */
+static const struct json_obj_descr reset_action_descr[] = {
+	JSON_OBJ_DESCR_PRIM(struct redfish_reset_action, target, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_reset_action,
+				   "ResetType@Redfish.AllowableValues",
+				   reset_type_values, 3, reset_type_values_len,
+				   JSON_TOK_STRING),
+};
+
+/* System Info: Actions nested object descriptor */
+static const struct json_obj_descr actions_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_actions, "#ComputerSystem.Reset",
+				    reset_action, reset_action_descr),
+};
+
+/* System Info descriptor */
+static const struct json_obj_descr computer_system_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "UUID",
+				  uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Description",
+				  description, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
+				  power_state, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
+				  serial_number, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
+				    actions, actions_descr),
+};
+
 static uint16_t redfish_http_port = 80;
 
 HTTP_SERVICE_DEFINE(redfish_http_service, NULL, &redfish_http_port, 5, 10,
@@ -72,16 +216,18 @@ static int service_root_handler(struct http_client_ctx *client,
 		struct http_response_ctx *response_ctx,
 		void *user_data)
 {
-	static const char *response =
-		"{\n"
-		"  \"@odata.type\": \"#ServiceRoot.v1_16_1.ServiceRoot\",\n"
-		"  \"@odata.id\": \"/redfish/v1/\",\n"
-		"  \"Id\": \"RootService\",\n"
-		"  \"Name\": \"Root Service\",\n"
-		"  \"RedfishVersion\": \"1.15.0\",\n"
-		"  \"UUID\": \"92384634-2938-2342-8820-489239905423\",\n"
-		"  \"Systems\": { \"@odata.id\": \"/redfish/v1/Systems\" }\n"
-		"}\n";
+	static char buffer[512];
+	const struct redfish_service_root service_root = {
+		.odata_type = "#ServiceRoot.v1_16_1.ServiceRoot",
+		.odata_id = "/redfish/v1/",
+		.id = "RootService",
+		.name = "Root Service",
+		.redfish_version = "1.15.0",
+		.uuid = "92384634-2938-2342-8820-489239905423",
+		.systems = {
+			.odata_id = "/redfish/v1/Systems"
+		}
+	};
 
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
@@ -92,15 +238,22 @@ static int service_root_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)response;
-	response_ctx->body_len = strlen(response);
+	if (status != HTTP_SERVER_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(service_root_descr,
+				       ARRAY_SIZE(service_root_descr),
+				       &service_root, buffer, sizeof(buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode service root: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)buffer;
+	response_ctx->body_len = strlen(buffer);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
-
-	/* Note: Headers are usually set via a separate callback or helper in complex apps,
-	   but basic content-type is often assumed or handled by default in simple resources.
-	   For strict Redfish compliance, we might need a custom header callback,
-	   but for this example, we rely on the body. */
 
 	return 0;
 }
@@ -112,17 +265,19 @@ static int systems_collection_handler(struct http_client_ctx *client,
 				      struct http_response_ctx *response_ctx,
 				      void *user_data)
 {
-	// Ok to hardcode ../system, or shouold it be the serial number?
-	static const char *response =
-		"{\n"
-		"  \"@odata.id\": \"/redfish/v1/Systems\",\n"
-		"  \"@odata.type\": \"#ComputerSystemCollection.ComputerSystemCollection\",\n"
-		"  \"Name\": \"Computer System Collection\",\n"
-		"  \"Members@odata.count\": 1,\n"
-		"  \"Members\": [\n"
-		"    { \"@odata.id\": \"/redfish/v1/Systems/system\" }\n"
-		"  ]\n"
-		"}\n";
+	static char buffer[512];
+	struct redfish_systems_collection systems_collection = {
+		.odata_id = "/redfish/v1/Systems",
+		.odata_type = "#ComputerSystemCollection.ComputerSystemCollection",
+		.name = "Computer System Collection",
+		.members_count = 1,
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Systems/system"
+			}
+		},
+		.members_len = 1
+	};
 
 	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
 
@@ -131,8 +286,20 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)response;
-	response_ctx->body_len = strlen(response);
+	if (status != HTTP_SERVER_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(systems_collection_descr,
+				       ARRAY_SIZE(systems_collection_descr),
+				       &systems_collection, buffer, sizeof(buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode systems collection: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)buffer;
+	response_ctx->body_len = strlen(buffer);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -155,29 +322,40 @@ static int system_info_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	snprintf(buffer, sizeof(buffer),
-			"{\n"
-			"  \"@odata.id\": \"/redfish/v1/Systems/system\",\n"
-			"  \"@odata.type\": \"#ComputerSystem.v1_22_0.ComputerSystem\",\n"
-			"  \"Id\": \"system\",\n"
-			"  \"UUID\": \"38947555-7742-3448-3784-823347823834\",\n"
-			"  \"Name\": \"Atlantis\",\n"
-			"  \"Description\": \"Atlantis\",\n"
-			"  \"PowerState\": \"%s\",\n"
-			"  \"SerialNumber\": \"%s\",\n"
-			"  \"Actions\": {\n"
-			"    \"#ComputerSystem.Reset\": {\n"
-			"      \"target\": \"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset\",\n"
-			"      \"ResetType@Redfish.AllowableValues\": [\n"
-			"        \"On\",\n"
-			"        \"ForceOff\",\n"
-			"        \"PowerCycle\"\n"
-			"      ]\n"
-			"    }\n"
-			"  }\n"
-			"}\n",
-			get_power_state() ? "On" : "Off", serial_number
-				);
+	if (status != HTTP_SERVER_DATA_FINAL)
+		return 0;
+
+	struct redfish_computer_system computer_system = {
+		.odata_id = "/redfish/v1/Systems/system",
+		.odata_type = "#ComputerSystem.v1_22_0.ComputerSystem",
+		.id = "system",
+		.uuid = "38947555-7742-3448-3784-823347823834",
+		.name = "Atlantis",
+		.description = "Atlantis",
+		.power_state = get_power_state() ? "On" : "Off",
+		.serial_number = serial_number,
+		.actions = {
+			.reset_action = {
+				.target = "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
+				.reset_type_values = {
+					"On",
+					"ForceOff",
+					"PowerCycle"
+				},
+				.reset_type_values_len = 3
+			}
+		}
+	};
+
+	int ret = json_obj_encode_buf(computer_system_descr,
+				       ARRAY_SIZE(computer_system_descr),
+				       &computer_system, buffer, sizeof(buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode computer system: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		return 0;
+	}
+
 	response_ctx->body = (uint8_t *)buffer;
 	response_ctx->body_len = strlen(buffer);
 	response_ctx->status = HTTP_200_OK;
