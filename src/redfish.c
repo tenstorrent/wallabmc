@@ -52,6 +52,11 @@ static const struct json_obj_descr reset_descr[] = {
 
 /* Structures for JSON encoding */
 
+/* Redfish Version response */
+struct redfish_version {
+	const char *v1;
+};
+
 /* Service Root: Systems nested object */
 struct redfish_systems_ref {
 	const char *odata_id;
@@ -109,6 +114,12 @@ struct redfish_computer_system {
 };
 
 /* JSON descriptors for encoding */
+
+/* Redfish Version descriptor */
+static const struct json_obj_descr redfish_version_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_version, "v1",
+				  v1, JSON_TOK_STRING),
+};
 
 /* Service Root: Systems nested object descriptor */
 static const struct json_obj_descr systems_ref_descr[] = {
@@ -208,6 +219,47 @@ static uint16_t redfish_https_port = 443;
 HTTPS_SERVICE_DEFINE(redfish_https_service, NULL, &redfish_https_port,
 		     5, 10, NULL, NULL, NULL, sec_tag_list_verify_none,
 		     sizeof(sec_tag_list_verify_none));
+
+/* Redfish Version: GET /redfish */
+static int redfish_version_handler(struct http_client_ctx *client,
+				   enum http_data_status status,
+				   const struct http_request_ctx *request_ctx,
+				   struct http_response_ctx *response_ctx,
+				   void *user_data)
+{
+	static char buffer[256];
+	const struct redfish_version version = {
+		.v1 = "/redfish/v1/"
+	};
+
+	if (status == HTTP_SERVER_DATA_ABORTED)
+		return 0;
+
+	/* Only handle GET */
+	if (client->method != HTTP_GET) {
+		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
+		return 0;
+	}
+
+	if (status != HTTP_SERVER_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(redfish_version_descr,
+				       ARRAY_SIZE(redfish_version_descr),
+				       &version, buffer, sizeof(buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode redfish version: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)buffer;
+	response_ctx->body_len = strlen(buffer);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
 
 /* Service Root: GET /redfish/v1/ */
 static int service_root_handler(struct http_client_ctx *client,
@@ -428,6 +480,20 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 	return 0;
 }
+
+// Redfish Version
+static struct http_resource_detail_dynamic version_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = redfish_version_handler,
+	.user_data = NULL,
+};
+HTTP_RESOURCE_DEFINE(redfish_version, redfish_http_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_https, redfish_https_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash, redfish_http_service, "/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, redfish_https_service, "/redfish", &version_detail);
 
 // Root
 static struct http_resource_detail_dynamic root_detail = {
