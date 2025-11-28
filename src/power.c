@@ -13,64 +13,84 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(power_shell);
 
-#define GPIO_POWER DT_ALIAS(led0)
-#define GPIO_RESET DT_ALIAS(led2)
+#define GPIO_POWER_1 DT_ALIAS(power_gpio_1)
+#define GPIO_POWER_2 DT_ALIAS(power_gpio_2)
+#define POWER_LED DT_ALIAS(power_led)
 
-static const struct gpio_dt_spec gpio_power = GPIO_DT_SPEC_GET(GPIO_POWER, gpios);
+static const struct gpio_dt_spec power_gpios[] = {
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_1)
+	GPIO_DT_SPEC_GET(GPIO_POWER_1, gpios),
+#endif
+#if DT_NODE_HAS_STATUS_OKAY(GPIO_POWER_2)
+	GPIO_DT_SPEC_GET(GPIO_POWER_2, gpios),
+#endif
+#if DT_NODE_HAS_STATUS_OKAY(POWER_LED)
+	GPIO_DT_SPEC_GET(POWER_LED, gpios),
+#endif
+};
 
-int power_init(void)
+static int power_on(void)
 {
-	int ret;
+	int i, ret;
 
-	if (!gpio_is_ready_dt(&gpio_power)) {
-		LOG_INF("Power GPIO not ready\n");
-		return -1;
-	}
-
-	ret = gpio_pin_configure_dt(&gpio_power, GPIO_OUTPUT_ACTIVE);
-	if (ret < 0) {
-		LOG_INF("Could not configure power GPIO\n");
-		return -1;
-	}
-
-	// Power on at BMC boot
-	ret = gpio_pin_set_dt(&gpio_power, 1);
-	if (ret < 0) {
-		LOG_INF("Could not toggle power GPIO\n");
-		return -1;
+	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
+		ret = gpio_pin_set_dt(&power_gpios[i], 1);
+		if (ret < 0) {
+			LOG_INF("Could not toggle power GPIO %d\n", i);
+			return -1;
+		}
 	}
 
 	return 0;
+}
+
+static int power_off(void)
+{
+	int i, ret;
+
+	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
+		ret = gpio_pin_set_dt(&power_gpios[i], 0);
+		if (ret < 0) {
+			LOG_INF("Could not toggle power GPIO %d\n", i);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int power_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(power_gpios); i++) {
+		if (!gpio_is_ready_dt(&power_gpios[i])) {
+			LOG_INF("Power GPIO %d not ready\n", i);
+			return -1;
+		}
+
+		if (gpio_pin_configure_dt(&power_gpios[i], GPIO_OUTPUT_INACTIVE) < 0) {
+			LOG_INF("Could not configure power GPIO %d\n", i);
+			return -1;
+		}
+	}
+
+	// Power on at BMC boot
+	return power_on();
 }
 
 static int cmd_power_on(const struct shell *sh, size_t argc, char **argv)
 {
-	int ret;
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
-
-	ret = gpio_pin_set_dt(&gpio_power, 1);
-	if (ret < 0) {
-		LOG_INF("Could not toggle power GPIO\n");
-		return -1;
-	}
-
-	return 0;
+	return power_on();
 }
 
 static int cmd_power_off(const struct shell *sh, size_t argc, char **argv)
 {
-	int ret;
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
-
-	ret = gpio_pin_set_dt(&gpio_power, 0);
-	if (ret < 0) {
-		LOG_INF("Could not toggle power GPIO\n");
-		return -1;
-	}
-
-	return 0;
+	return power_off();
 }
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_power_cmds,
@@ -81,6 +101,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_power_cmds,
 
 SHELL_CMD_REGISTER(power, &sub_power_cmds, "Power commands", NULL);
 
+#define GPIO_RESET DT_ALIAS(led2)
 static const struct gpio_dt_spec gpio_reset = GPIO_DT_SPEC_GET(GPIO_RESET, gpios);
 
 int reset_init(void)

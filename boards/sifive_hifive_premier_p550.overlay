@@ -24,6 +24,10 @@
         jtagtms = &jtagtms;
         jtagtdi = &jtagtdi;
         jtagtdo = &jtagtdo;
+
+        power-gpio-1 = &dcen;
+        power-gpio-2 = &atxpson;
+        // power-led = &green_led;
     };
 
 };
