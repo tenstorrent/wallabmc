@@ -1,3 +1,5 @@
+/delete-node/ &quadspi_memory;
+
 // Nucleo F767ZI
 / {
     jtag {
