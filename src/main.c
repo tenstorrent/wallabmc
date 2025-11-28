@@ -8,6 +8,7 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 #include <zephyr/kernel.h>
 #include <zephyr/net/hostname.h>
 
+#include "fs.h"
 #include "power.h"
 #include "dhcp.h"
 #include "jtag.h"
@@ -15,6 +16,11 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 
 int main(void)
 {
+	if (fs_init() < 0) {
+		LOG_ERR("Filesystem init failed");
+		return -1;
+	}
+
 	LOG_INF("   Hostname: %s", net_hostname_get());
 
 	if (start_dhcp4() < 0) {
