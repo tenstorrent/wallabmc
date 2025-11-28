@@ -16,6 +16,10 @@ target_sources_ifdef(CONFIG_JTAG app PRIVATE
 	src/jtag.c
 )
 
+target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
+	src/fs.c
+)
+
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
