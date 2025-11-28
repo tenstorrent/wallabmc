@@ -442,6 +442,10 @@ HTTP_RESOURCE_DEFINE(redfish_root, redfish_http_service, "/redfish/v1/",
 		&root_detail);
 HTTP_RESOURCE_DEFINE(redfish_root_https, redfish_https_service, "/redfish/v1/",
 		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash, redfish_http_service, "/redfish/v1",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, redfish_https_service, "/redfish/v1",
+		&root_detail);
 
 // Systems Collection Registration
 static struct http_resource_detail_dynamic systems_coll_detail = {
