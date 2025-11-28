@@ -239,12 +239,6 @@ static int redfish_version_handler(struct http_client_ctx *client,
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
 
-	/* Only handle GET */
-	if (client->method != HTTP_GET) {
-		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
-		return 0;
-	}
-
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
 
@@ -289,12 +283,6 @@ static int service_root_handler(struct http_client_ctx *client,
 
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
-
-	/* Only handle GET */
-	if (client->method != HTTP_GET) {
-		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
-		return 0;
-	}
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
@@ -341,11 +329,6 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
 
-	if (client->method != HTTP_GET) {
-		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
-		return 0;
-	}
-
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
 
@@ -378,11 +361,6 @@ static int system_info_handler(struct http_client_ctx *client,
 	static char buffer[1024]; // Static to persist for response duration
 
 	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
-
-	if (client->method != HTTP_GET) {
-		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
-		return 0;
-	}
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
