@@ -29,7 +29,14 @@ static const struct gpio_dt_spec power_gpios[] = {
 #endif
 };
 
-static int power_on(void)
+static bool system_power_state = false;
+
+bool get_power_state(void)
+{
+	return system_power_state;
+}
+
+int power_on(void)
 {
 	int i, ret;
 
@@ -41,10 +48,12 @@ static int power_on(void)
 		}
 	}
 
+	system_power_state = true;
+
 	return 0;
 }
 
-static int power_off(void)
+int power_off(void)
 {
 	int i, ret;
 
@@ -55,6 +64,8 @@ static int power_off(void)
 			return -1;
 		}
 	}
+
+	system_power_state = false;
 
 	return 0;
 }
@@ -128,11 +139,9 @@ int reset_init(void)
 	return 0;
 }
 
-static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
+int power_reset(void)
 {
 	int ret;
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
 
 	ret = gpio_pin_set_dt(&gpio_reset, 1);
 	if (ret < 0) {
@@ -149,6 +158,13 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	return 0;
+}
+
+static int cmd_reset(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	return power_reset();
 }
 
 SHELL_CMD_REGISTER(reset, NULL, "Reset.", cmd_reset);
