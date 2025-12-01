@@ -10,10 +10,12 @@ LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
 
 #include <zephyr/fs/fs.h>
 #include <zephyr/net/hostname.h>
+#include <zephyr/posix/arpa/inet.h> /* inet_ntop */
 
 #include "config.h"
 #include "main.h"
 #include "net.h"
+#include "dhcp.h"
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
@@ -29,12 +31,24 @@ static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 struct config_data {
 	uint8_t version;
 	char bmc_hostname[MAX_HOSTNAME_LEN + 1]; /* NULL terminated */
+	uint32_t bmc_default_ip4;
+	uint8_t bmc_use_dhcp4;
 } __packed;
 
 static struct config_data config_data;
 
 /* Config is updated but not saved to flash */
 static bool config_dirty = false;
+
+uint32_t config_bmc_default_ip4(void)
+{
+	return config_data.bmc_default_ip4;
+}
+
+bool config_bmc_use_dhcp4(void)
+{
+	return config_data.bmc_use_dhcp4;
+}
 
 static bool config_exists(void)
 {
@@ -179,8 +193,111 @@ static int cmd_config_bmc_hostname(const struct shell *sh, size_t argc, char **a
 	return 0;
 }
 
+static const char *config_default_ip4_string(void)
+{
+	static char default_ip4_str[INET_ADDRSTRLEN];
+	static struct in_addr addr;
+
+	addr.s_addr = config_data.bmc_default_ip4;
+
+	if (inet_ntop(AF_INET, &addr, default_ip4_str, sizeof(default_ip4_str)) == NULL) {
+		LOG_ERR("Could not convert IPv4 address 0x%08x to str", config_data.bmc_default_ip4);
+		return NULL;
+	}
+
+	return default_ip4_str;
+}
+
+static int config_set_default_ip4(const char *str)
+{
+	static struct in_addr addr;
+	int rc;
+
+	rc = inet_pton(AF_INET, str, &addr);
+	if (rc != 1) {
+		LOG_ERR("Could not convert IPv4 address %s in_addr", str);
+		return -EINVAL;
+	}
+
+	config_data.bmc_default_ip4 = addr.s_addr;
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_DEFAULT_IP4		\
+	"Configure BMC default IPv4 address\n"	\
+	"Usage: bmc ipv4_addr <IPv4 address>"
+
+static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	rc = config_set_default_ip4(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC default IPv4 address (err=%d)", rc);
+		return rc;
+	}
+
+	/* XXX: remove default address if it is 0? */
+	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
+	if (rc) {
+		shell_error(sh, "Could not apply BMC default IPv4 address (err=%d)", rc);
+		return rc;
+	}
+
+	shell_info(sh, "BMC default IPv4 address set to %s", argv[1]);
+
+	config_dirty = true;
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_DHCP4			\
+	"BMC DHCP4 enabled\n"			\
+	"Usage: bmc dhcpv4 <enable|disable>"
+
+static int cmd_config_bmc_dhcp4(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	if (!strcmp(argv[1], "enable")) {
+		if (config_data.bmc_use_dhcp4 == 1)
+			return 0;
+		config_data.bmc_use_dhcp4 = 1;
+		shell_info(sh, "BMC DHCPv4 enabled");
+		start_dhcp4();
+	} else if (!strcmp(argv[1], "disable")) {
+		if (config_data.bmc_use_dhcp4 == 0)
+			return 0;
+		config_data.bmc_use_dhcp4 = 0;
+		shell_info(sh, "BMC DHCPv4 disabled");
+		stop_dhcp4();
+	} else {
+		shell_error(sh, "bmc dhcpv4: unknown argument %s", argv[1]);
+		return -EINVAL;
+	}
+
+	config_dirty = true;
+
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
-	SHELL_CMD_ARG(hostname,    NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
+	SHELL_CMD_ARG(hostname,		NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
+	SHELL_CMD_ARG(ipv4_addr,	NULL, CMD_HELP_BMC_DEFAULT_IP4, cmd_config_bmc_default_ip4, 2, 0),
+	SHELL_CMD_ARG(dhcpv4,		NULL, CMD_HELP_BMC_DHCP4, cmd_config_bmc_dhcp4, 2, 0),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -192,6 +309,8 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "--- Configuration ---");
 	shell_print(sh, "Version: %d",		config_data.version);
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
+	shell_print(sh, "BMC default IPv4: %s", config_default_ip4_string());
+	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
 	shell_print(sh, "---------------------");
 	if (config_dirty) {
 		if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
@@ -302,6 +421,24 @@ int config_init(void)
 	} else {
 		/* This defaults to CONFIG_NET_HOSTNAME */
 		strncpy(config_data.bmc_hostname, net_hostname_get(), MAX_HOSTNAME_LEN);
+	}
+
+	if (IS_ONDISK(bmc_use_dhcp4))
+		LOG_INF("BMC DHCPv4: %s", config_data.bmc_use_dhcp4 ? "enabled" : "disabled");
+	else
+		config_data.bmc_use_dhcp4 = 1; /* Default to enabled */
+
+	if (IS_ONDISK(bmc_default_ip4)) {
+		if (config_data.bmc_default_ip4) {
+			rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
+			if (rc) {
+				LOG_ERR("Config: could not set default IPv4");
+				return rc;
+			}
+			LOG_INF("BMC default IPv4 set to %s", config_default_ip4_string());
+		}
+	} else {
+		config_data.bmc_default_ip4 = 0; /* Default to not set */
 	}
 #undef IS_ONDISK
 
