@@ -9,6 +9,7 @@ zephyr_linker_sources(SECTIONS sections-rom.ld)
 target_sources(app PRIVATE
 	src/dhcp.c
 	src/main.c
+	src/net.c
 	src/power.c
 )
 
