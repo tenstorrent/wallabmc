@@ -9,15 +9,28 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 #include <zephyr/net/hostname.h>
 
 #include "fs.h"
+#include "config.h"
+#include "net.h"
 #include "power.h"
-#include "dhcp.h"
 #include "jtag.h"
 #include "redfish.h"
+
+static bool boot_finished = false;
+
+bool is_boot_finished(void)
+{
+	return boot_finished;
+}
 
 int main(void)
 {
 	if (fs_init() < 0) {
 		LOG_ERR("Filesystem init failed");
+		return -1;
+	}
+
+	if (config_init() < 0) {
+		LOG_ERR("Config init failed");
 		return -1;
 	}
 
@@ -50,6 +63,8 @@ int main(void)
 		LOG_ERR("JTAG init failed");
 		return -1;
 	}
+
+	boot_finished = true;
 
 	return 0;
 }
