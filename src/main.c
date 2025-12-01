@@ -21,10 +21,8 @@ int main(void)
 		return -1;
 	}
 
-	LOG_INF("   Hostname: %s", net_hostname_get());
-
-	if (start_dhcp4() < 0) {
-		LOG_ERR("DHCP4 init failed");
+	if (net_init() < 0) {
+		LOG_ERR("Network init failed");
 		return -1;
 	}
 
