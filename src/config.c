@@ -241,6 +241,22 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 
 SHELL_CMD_REGISTER(config, &sub_config_cmds, "Configuration commands", NULL);
 
+int config_clear(void)
+{
+	int rc;
+
+	if (!config_exists())
+		return 0; /* Already cleared */
+
+	rc = fs_unlink(CONFIG_FILE);
+	if (rc) {
+		LOG_ERR("Could not remove file %s (err=%d)", CONFIG_FILE, rc);
+		return rc;
+	}
+
+	return 0;
+}
+
 int config_init(void)
 {
 	int ondisk_size;

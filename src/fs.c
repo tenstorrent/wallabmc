@@ -146,8 +146,19 @@ int fs_init(void)
 
 	return 0;
 }
+
+int fs_exit(void)
+{
+	return umount_fs();
+}
 #else /* FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL) */
 int fs_init(void)
+{
+	LOG_INF("Filesystem storage not enabled for this board");
+	return 0;
+}
+
+int fs_exit(void)
 {
 	LOG_INF("Filesystem storage not enabled for this board");
 	return 0;
