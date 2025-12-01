@@ -19,6 +19,7 @@ target_sources_ifdef(CONFIG_JTAG app PRIVATE
 )
 
 target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
+	src/button.c
 	src/fs.c
 )
 
