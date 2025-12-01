@@ -19,6 +19,23 @@ LOG_MODULE_REGISTER(stm32_bmc_net, LOG_LEVEL_INF);
 #include "net.h"
 #include "dhcp.h"
 
+int net_do_set_hostname(const char *hostname)
+{
+	int rc;
+
+	rc = net_hostname_set(hostname, strlen(hostname));
+	if (rc) {
+		return rc;
+	}
+
+	rc = restart_dhcp4();
+	if (rc) {
+		return rc;
+	}
+
+	return rc;
+}
+
 int net_init(void)
 {
 	int rc;

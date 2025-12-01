@@ -36,6 +36,15 @@ static void start_dhcpv4_client(struct net_if *iface, void *user_data)
 	net_dhcpv4_start(iface);
 }
 
+static void restart_dhcpv4_client(struct net_if *iface, void *user_data)
+{
+	ARG_UNUSED(user_data);
+
+	LOG_INF("Restart on %s: index=%d", net_if_get_device(iface)->name,
+		net_if_get_by_iface(iface));
+	net_dhcpv4_restart(iface);
+}
+
 static void handler(struct net_mgmt_event_callback *cb,
 		    uint64_t mgmt_event,
 		    struct net_if *iface)
@@ -97,5 +106,13 @@ int start_dhcp4(void)
 	net_dhcpv4_add_option_callback(&dhcp_cb);
 
 	net_if_foreach(start_dhcpv4_client, NULL);
+
+	return 0;
+}
+
+int restart_dhcp4(void)
+{
+	net_if_foreach(restart_dhcpv4_client, NULL);
+
 	return 0;
 }
