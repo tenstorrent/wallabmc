@@ -66,6 +66,22 @@ config APP_WEB
 	select HTTP_SERVER
 	select REDFISH
 
+config APP_WEB_TERMINAL
+	bool "Browser based terminal emulator"
+	default y
+	select APP_WEB
+	select HTTP_SERVER_WEBSOCKET
+	select SHELL_BACKEND_WEBSOCKET
+	select LOG_BACKEND_WS
+	select LOG_BACKEND_WS_AUTOSTART
+	#NET_TCP_WORKQ_STACK_SIZE=2048
+
+# WS log backend uses lot of stack
+config LOG_PROCESS_THREAD_STACK_SIZE
+	int
+	depends on LOG_BACKEND_WS
+	default 4096
+
 config NET_MAX_CONTEXTS
 	int
 	depends on HTTP_SERVER
