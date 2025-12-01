@@ -9,10 +9,15 @@ LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
 #include <zephyr/kernel.h>
 
 #include <zephyr/fs/fs.h>
+#include <zephyr/net/hostname.h>
 
 #include "config.h"
+#include "main.h"
+#include "net.h"
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
+
+#define MAX_HOSTNAME_LEN 31
 
 /*
  * Add fields to the end, do not remove or change meaning.
@@ -23,6 +28,7 @@ static const char CONFIG_FILE[] = "/lfs/config_data.bin";
  */
 struct config_data {
 	uint8_t version;
+	char bmc_hostname[MAX_HOSTNAME_LEN + 1]; /* NULL terminated */
 } __packed;
 
 static struct config_data config_data;
@@ -144,6 +150,40 @@ static int write_config(void)
 	return copied;
 }
 
+#define CMD_HELP_BMC_HOSTNAME			\
+	"Configure BMC hostname\n"		\
+	"Usage: bmc hostname <hostname>"
+
+static int cmd_config_bmc_hostname(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	rc = net_do_set_hostname(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC hostname (err=%d)", rc);
+		return rc;
+	}
+
+	strncpy(config_data.bmc_hostname, argv[1], MAX_HOSTNAME_LEN);
+	shell_info(sh, "BMC hostname set to %s", config_data.bmc_hostname);
+
+	config_dirty = true;
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
+	SHELL_CMD_ARG(hostname,    NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
+	SHELL_SUBCMD_SET_END
+);
+
 static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -151,6 +191,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 
 	shell_print(sh, "--- Configuration ---");
 	shell_print(sh, "Version: %d",		config_data.version);
+	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
 	shell_print(sh, "---------------------");
 	if (config_dirty) {
 		if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
@@ -194,6 +235,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 #ifdef CONFIG_PERSISTENT_STORAGE
 	SHELL_CMD(save,	NULL, "Save configuration.", &cmd_config_save),
 #endif
+	SHELL_CMD(bmc,	&sub_config_bmc_cmds, "BMC configuration commands.", NULL),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -232,6 +274,18 @@ int config_init(void)
 		}
 	} else {
 		config_data.version = 1;
+	}
+
+	if (IS_ONDISK(bmc_hostname)) {
+		rc = net_do_set_hostname(config_data.bmc_hostname);
+		if (rc) {
+			LOG_ERR("Config: could not set hostname to %s", config_data.bmc_hostname);
+			return rc;
+		}
+		LOG_INF("BMC hostname set to %s", config_data.bmc_hostname);
+	} else {
+		/* This defaults to CONFIG_NET_HOSTNAME */
+		strncpy(config_data.bmc_hostname, net_hostname_get(), MAX_HOSTNAME_LEN);
 	}
 #undef IS_ONDISK
 
