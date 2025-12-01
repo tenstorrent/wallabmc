@@ -144,7 +144,7 @@ int fs_init(void)
 		}
 	}
 
-	return umount_fs();
+	return 0;
 }
 #else /* FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL) */
 int fs_init(void)
