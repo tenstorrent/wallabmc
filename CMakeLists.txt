@@ -8,9 +8,12 @@ zephyr_linker_sources(SECTIONS sections-rom.ld)
 
 target_sources(app PRIVATE
 	src/dhcp.c
-	src/jtag.c
 	src/main.c
 	src/power.c
+)
+
+target_sources_ifdef(CONFIG_JTAG app PRIVATE
+	src/jtag.c
 )
 
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
