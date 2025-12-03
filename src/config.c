@@ -33,6 +33,7 @@ struct config_data {
 	char bmc_hostname[MAX_HOSTNAME_LEN + 1]; /* NULL terminated */
 	uint32_t bmc_default_ip4;
 	uint8_t bmc_use_dhcp4;
+	uint8_t host_auto_poweron;
 } __packed;
 
 static struct config_data config_data;
@@ -48,6 +49,11 @@ uint32_t config_bmc_default_ip4(void)
 bool config_bmc_use_dhcp4(void)
 {
 	return config_data.bmc_use_dhcp4;
+}
+
+bool config_host_auto_poweron(void)
+{
+	return config_data.host_auto_poweron;
 }
 
 static bool config_exists(void)
@@ -301,6 +307,41 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
 	SHELL_SUBCMD_SET_END
 );
 
+#define CMD_HELP_HOST_AUTO_POWERON		\
+	"Host auto poweron enabled\n"		\
+	"Usage: host auto_poweron <enable|disable>"
+
+static int cmd_config_host_auto_poweron(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	if (!strcmp(argv[1], "enable")) {
+		if (config_data.host_auto_poweron == 1)
+			return 0;
+		config_data.host_auto_poweron = 1;
+		shell_info(sh, "Host auto poweron enabled");
+	} else if (!strcmp(argv[1], "disable")) {
+		if (config_data.host_auto_poweron == 0)
+			return 0;
+		config_data.host_auto_poweron = 0;
+		shell_info(sh, "Host auto poweron disabled");
+	}
+
+	config_dirty = true;
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_host_cmds,
+	SHELL_CMD_ARG(auto_poweron,	NULL, CMD_HELP_HOST_AUTO_POWERON, cmd_config_host_auto_poweron, 2, 0),
+	SHELL_SUBCMD_SET_END
+);
+
 static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -311,6 +352,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
 	shell_print(sh, "BMC default IPv4: %s", config_default_ip4_string());
 	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
+	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
 	if (config_dirty) {
 		if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
@@ -355,6 +397,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 	SHELL_CMD(save,	NULL, "Save configuration.", &cmd_config_save),
 #endif
 	SHELL_CMD(bmc,	&sub_config_bmc_cmds, "BMC configuration commands.", NULL),
+	SHELL_CMD(host,	&sub_config_host_cmds, "Host configuration commands.", NULL),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -440,6 +483,12 @@ int config_init(void)
 	} else {
 		config_data.bmc_default_ip4 = 0; /* Default to not set */
 	}
+
+	if (IS_ONDISK(host_auto_poweron))
+		LOG_INF("Host auto-poweron: %s", config_data.host_auto_poweron ? "enabled" : "disabled");
+	else
+		config_data.host_auto_poweron = 0; /* Default to disabled */
+
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
