@@ -13,6 +13,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(power_shell);
 
+#include "config.h"
+
 #define GPIO_POWER_1 DT_ALIAS(power_gpio_1)
 #define GPIO_POWER_2 DT_ALIAS(power_gpio_2)
 #define GPIO_RESET DT_ALIAS(reset_gpio)
@@ -84,8 +86,12 @@ int power_init(void)
 		}
 	}
 
-	// Power on at BMC boot
-	return power_on();
+	if (config_host_auto_poweron()) {
+		// Power on at BMC boot
+		return power_on();
+	}
+
+	return 0;
 }
 
 static int cmd_power_on(const struct shell *sh, size_t argc, char **argv)
