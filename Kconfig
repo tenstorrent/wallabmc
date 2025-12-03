@@ -69,6 +69,10 @@ config ZVFS_POLL_MAX
 	depends on HTTP_SERVER
 	default 8
 
+config JTAG
+	bool "JTAG support"
+	default y
+
 config JTAG_DAEMON_STACK_SIZE
 	int "JTAG daemon stack size"
 	default 1024
