@@ -1,6 +1,6 @@
 int power_init(void);
 int reset_init(void);
-int led_init(void);
+int status_led_init(void);
 
 int power_on(void);
 int power_off(void);
