@@ -27,7 +27,7 @@
 
         power-gpio-1 = &dcen;
         power-gpio-2 = &atxpson;
-        // power-led = &green_led;
+        status-led = &blue_led;
     };
 
 };

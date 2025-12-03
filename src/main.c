@@ -32,7 +32,7 @@ int main(void)
 		return -1;
 	}
 
-	if (led_init() < 0) {
+	if (status_led_init() < 0) {
 		LOG_ERR("LED init failed");
 		return -1;
 	}
