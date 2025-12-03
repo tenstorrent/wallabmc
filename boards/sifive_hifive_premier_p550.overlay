@@ -35,3 +35,7 @@
 &spi4 {
      status = "disabled";
 };
+
+&rng {
+    status = "okay";
+};
