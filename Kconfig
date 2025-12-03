@@ -1,5 +1,74 @@
 # SPDX-License-Identifier: Apache-2.0
 
+mainmenu "Atlantis BMC application"
+
+config REDFISH_CRYPTO
+	def_bool n
+	select MBEDTLS
+	select MBEDTLS_ENABLE_HEAP
+	select NET_SOCKETS_SOCKOPT_TLS
+	select TLS_CREDENTIALS
+	select PSA_WANT_ALG_ECDH
+	select PSA_WANT_ALG_ECDSA
+	select PSA_WANT_ECC_SECP_R1_256
+	select PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY
+	select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_IMPORT
+	select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_EXPORT
+	select PSA_WANT_KEY_TYPE_ECC_KEY_PAIR_GENERATE
+	select MBEDTLS_KEY_EXCHANGE_ECDHE_ECDSA_ENABLED
+	select PSA_WANT_ALG_CCM
+	select PSA_WANT_ALG_GCM
+	select MBEDTLS_PK_WRITE_C
+	select PSA_WANT_ALG_TLS12_PRF
+	select PSA_WANT_ALG_SHA_1
+	select PSA_WANT_ALG_SHA_256
+	select PSA_CRYPTO
+	select PSA_WANT_ALG_CHACHA20_POLY1305
+	select PSA_WANT_KEY_TYPE_CHACHA20
+
+config MBEDTLS_HEAP_SIZE
+	int
+	depends on REDFISH_CRYPTO
+#	Redfish authentication uses about 16500 bytes
+	default 20000
+
+config NET_SOCKETS_TLS_MAX_CONTEXTS
+	int
+	depends on REDFISH_CRYPTO
+	default 4
+
+config MBEDTLS_SSL_MAX_CONTENT_LEN
+	int
+	depends on REDFISH_CRYPTO
+	default 2048
+
+config REDFISH
+	bool "Redfish server"
+	default y
+	select REDFISH_CRYPTO
+	select HTTP_SERVER
+	select JSON_LIBRARY
+
+config NET_MAX_CONTEXTS
+	int
+	depends on HTTP_SERVER
+	default 12
+
+config NET_MAX_CONN
+	int
+	depends on HTTP_SERVER
+	default 16
+
+config ZVFS_EVENTFD_MAX
+	int
+	depends on HTTP_SERVER
+	default 4
+
+config ZVFS_POLL_MAX
+	int
+	depends on HTTP_SERVER
+	default 8
+
 config JTAG_DAEMON_STACK_SIZE
 	int "JTAG daemon stack size"
 	default 1024
