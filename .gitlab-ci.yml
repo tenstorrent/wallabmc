@@ -5,7 +5,6 @@ stages:
 image: zephyrprojectrtos/zephyr-build:latest
 
 variables:
-  ZEPHYR_BOARD: nucleo_f767zi
   ZEPHYR_WORKSPACE: zephyrproject
 
 .zephyr_setup: &zephyr_setup_template
@@ -23,14 +22,18 @@ variables:
     - source .venv/bin/activate
     - export ZEPHYR_BASE=$PWD/zephyr
 
+
 build:
   stage: build
   <<: *zephyr_setup_template
   script:
     # -p auto: automatically handles pristine builds
-    - west build -p auto -b $ZEPHYR_BOARD ..
+    - west build -p auto -b $BOARD ..
     # copy the build artifacts to the root directory
     - cp build/zephyr/zephyr.elf build/zephyr/zephyr.hex build/zephyr/.config ..
+  parallel:
+    matrix:
+      - BOARD: [ nucleo_f767zi, hifive_premier_p550_mcu ]
   artifacts:
     paths:
       - zephyr.elf
