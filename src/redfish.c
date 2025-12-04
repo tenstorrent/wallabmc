@@ -211,7 +211,7 @@ static const struct json_obj_descr computer_system_descr[] = {
 
 static uint16_t redfish_http_port = 80;
 
-HTTP_SERVICE_DEFINE(redfish_http_service, NULL, &redfish_http_port, 5, 10,
+HTTP_SERVICE_DEFINE(redfish_http_service, NULL, &redfish_http_port, 2, 5,
 		    NULL, NULL, NULL);
 
 static const sec_tag_t sec_tag_list_verify_none[] = {
@@ -221,7 +221,7 @@ static const sec_tag_t sec_tag_list_verify_none[] = {
 static uint16_t redfish_https_port = 443;
 
 HTTPS_SERVICE_DEFINE(redfish_https_service, NULL, &redfish_https_port,
-		     5, 10, NULL, NULL, NULL, sec_tag_list_verify_none,
+		     2, 5, NULL, NULL, NULL, sec_tag_list_verify_none,
 		     sizeof(sec_tag_list_verify_none));
 
 /* Redfish Version: GET /redfish */
