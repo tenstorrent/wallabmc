@@ -1,0 +1,20 @@
+# hifive_premier_p550_mcu board configuration
+
+# Copyright (c) 2025 Tenstorrent Corporation
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_HIFIVE_PREMIER_P550_MCU
+
+config SPI_STM32_INTERRUPT
+	default y
+	depends on SPI
+
+if NETWORKING
+
+config NET_L2_ETHERNET
+	default y
+
+endif # NETWORKING
+
+endif # BOARD_HIFIVE_PREMIER_P550_MCU
+

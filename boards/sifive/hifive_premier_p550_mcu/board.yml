@@ -1,0 +1,7 @@
+board:
+  name: hifive_premier_p550_mcu
+  full_name: SiFive HiFive Premier P550 MCU
+  vendor: sifive
+  socs:
+    - name: stm32f407xx
+
