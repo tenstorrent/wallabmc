@@ -1,4 +1,4 @@
-// sifive hifive premier p550
+// hifive premier p550 mcu
 / {
     jtag {
         // What is a better setting for this?
