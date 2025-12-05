@@ -1,0 +1,16 @@
+identifier: hifive_premier_p550_mcu
+name: SiFive HiFive Premier P550 MCU
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 192
+flash: 512
+supported:
+  - can
+  - pwm
+  - counter
+  - spi
+  - gpio
+
