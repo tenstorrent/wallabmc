@@ -19,6 +19,9 @@ LOG_MODULE_REGISTER(stm32_bmc_dhcp, LOG_LEVEL_INF);
 #include <zephyr/net/net_context.h>
 #include <zephyr/net/net_mgmt.h>
 
+#include "dhcp.h"
+#include "config.h"
+
 #define DHCP_OPTION_NTP (42)
 
 static uint8_t ntp_server[4];
@@ -34,6 +37,24 @@ static void start_dhcpv4_client(struct net_if *iface, void *user_data)
 	LOG_INF("Start on %s: index=%d", net_if_get_device(iface)->name,
 		net_if_get_by_iface(iface));
 	net_dhcpv4_start(iface);
+}
+
+static void restart_dhcpv4_client(struct net_if *iface, void *user_data)
+{
+	ARG_UNUSED(user_data);
+
+	LOG_INF("Restart on %s: index=%d", net_if_get_device(iface)->name,
+		net_if_get_by_iface(iface));
+	net_dhcpv4_restart(iface);
+}
+
+static void stop_dhcpv4_client(struct net_if *iface, void *user_data)
+{
+	ARG_UNUSED(user_data);
+
+	LOG_INF("Stop on %s: index=%d", net_if_get_device(iface)->name,
+		net_if_get_by_iface(iface));
+	net_dhcpv4_stop(iface);
 }
 
 static void handler(struct net_mgmt_event_callback *cb,
@@ -82,7 +103,7 @@ static void option_handler(struct net_dhcpv4_option_callback *cb,
 		net_addr_ntop(AF_INET, cb->data, buf, sizeof(buf)));
 }
 
-int start_dhcp4(void)
+int dhcp4_init(void)
 {
 	LOG_INF("Run dhcpv4 client");
 
@@ -96,6 +117,26 @@ int start_dhcp4(void)
 
 	net_dhcpv4_add_option_callback(&dhcp_cb);
 
+	return 0;
+}
+
+int start_dhcp4(void)
+{
 	net_if_foreach(start_dhcpv4_client, NULL);
+
+	return 0;
+}
+
+int restart_dhcp4(void)
+{
+	net_if_foreach(restart_dhcpv4_client, NULL);
+
+	return 0;
+}
+
+int stop_dhcp4(void)
+{
+	net_if_foreach(stop_dhcpv4_client, NULL);
+
 	return 0;
 }
