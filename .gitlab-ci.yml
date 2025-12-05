@@ -1,6 +1,25 @@
 stages:
   - build
 
+workflow:
+  rules:
+    # Don't run CI on archived branches
+    - if: $CI_COMMIT_BRANCH =~ /^archive\//
+      when: never
+    # From: https://docs.gitlab.com/ee/ci/yaml/workflow.html#switch-between-branch-pipelines-and-merge-request-pipelines
+    # This does two things.
+    # 1) Ensures all jobs are run for merge requests
+    # 2) Prevents there being a pipeline triggered for a branch
+    #    when there is an open merge request (a wasted double up)
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  tags:
+    - 8-core
+
 # Use a pre-built Docker image that includes the Zephyr build environment.
 image: zephyrprojectrtos/zephyr-build:latest
 
