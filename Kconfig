@@ -172,11 +172,6 @@ config ZVFS_POLL_MAX
 	depends on HTTP_SERVER
 	default 8
 
-config JTAG
-	bool "JTAG support"
-	depends on $(dt_path_enabled,'/jtag')
-	default y
-
 config PERSISTENT_STORAGE
 	bool "Persistent storage for config"
 	default n
@@ -197,6 +192,11 @@ config PERSISTENT_STORAGE
 	select FILE_SYSTEM
 	select FILE_SYSTEM_LITTLEFS
 	select FILE_SYSTEM_MKFS
+
+config JTAG
+	bool "JTAG support"
+	depends on $(dt_path_enabled,'/jtag')
+	default y
 
 if JTAG
 
