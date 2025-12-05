@@ -71,6 +71,7 @@ config ZVFS_POLL_MAX
 
 config JTAG
 	bool "JTAG support"
+	depends on $(dt_path_enabled,'/jtag')
 	default y
 
 config PERSISTENT_STORAGE
@@ -94,6 +95,8 @@ config PERSISTENT_STORAGE
 	select FILE_SYSTEM_LITTLEFS
 	select FILE_SYSTEM_MKFS
 
+if JTAG
+
 config JTAG_DAEMON_STACK_SIZE
 	int "JTAG daemon stack size"
 	default 1024
@@ -101,5 +104,7 @@ config JTAG_DAEMON_STACK_SIZE
 config JTAG_DAEMON_PRIORITY
 	int "JTAG daemon priority"
 	default 5
+
+endif
 
 source "Kconfig.zephyr"
