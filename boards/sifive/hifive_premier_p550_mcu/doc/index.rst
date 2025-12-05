@@ -3,7 +3,7 @@
 Overview
 ********
 
-The SiFive HiFive Premier P550 board features an ARM Cortex-M4 based STM32F407xx MCU
+The SiFive HiFive Premier P550 board features an ARM Cortex-M4 based STM32F407XE MCU
 with a wide range of connectivity support and configurations.
 
 Hardware
@@ -12,8 +12,8 @@ Hardware
 SiFive HiFive Premier P550 board provides the following hardware components:
 
 - Quad core Sifive P550 RISC-V processor (Unused here)
-- STM32F407xx microcontroller
-- ARM |reg| 32-bit Cortex |reg| -M4 CPU with FPU
+- STM32F407XE microcontroller
+- ARM reg 32-bit Cortex reg -M4 CPU with FPU
 - 168 MHz max CPU frequency
 - VDD from 1.8 V to 3.6 V
 - 8MHz system crystal
