@@ -1,0 +1,114 @@
+/* Networking */
+
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(stm32_bmc_net, LOG_LEVEL_INF);
+
+#include <zephyr/kernel.h>
+#include <zephyr/linker/sections.h>
+#include <errno.h>
+#include <stdio.h>
+
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_core.h>
+#include <zephyr/net/net_context.h>
+#include <zephyr/net/net_mgmt.h>
+
+#include "net.h"
+#include "dhcp.h"
+#include "config.h"
+
+int net_do_set_hostname(const char *hostname)
+{
+	int rc;
+
+	rc = net_hostname_set(hostname, strlen(hostname));
+	if (rc) {
+		return rc;
+	}
+
+	rc = restart_dhcp4();
+	if (rc) {
+		return rc;
+	}
+
+	return rc;
+}
+
+int net_do_set_default_ip4(uint32_t ip4_addr)
+{
+	struct net_if *iface = net_if_get_default();
+	struct in_addr addr;
+	struct net_if_addr *if_addr;
+	struct net_if_ipv4 *ipv4;
+
+	if (!iface) {
+		LOG_ERR("No default interface to set IPv4 address");
+		return -ENOENT;
+	}
+
+	/* Remove existing MANUAL/OVERRIDABLE */
+	ipv4 = iface->config.ip.ipv4;
+	if (ipv4) {
+		for (int i = 0; i < NET_IF_MAX_IPV4_ADDR; i++) {
+			if (!ipv4->unicast[i].ipv4.is_used)
+				continue;
+
+			if (ipv4->unicast[i].ipv4.addr_type == NET_ADDR_MANUAL ||
+			    ipv4->unicast[i].ipv4.addr_type == NET_ADDR_OVERRIDABLE) {
+				/* XXX: Check return value? */
+				net_if_ipv4_addr_rm(iface, &ipv4->unicast[i].ipv4.address.in_addr);
+			}
+		}
+	}
+
+	addr.s_addr = ip4_addr;
+	if_addr = net_if_ipv4_addr_add(iface, &addr, NET_ADDR_OVERRIDABLE, 0);
+	if (!if_addr) {
+		LOG_ERR("Failed to add IPv4 address");
+		return -EINVAL;
+	}
+
+	/*
+	 * Could also allow netmask and gw set -
+	 * net_if_ipv4_set_netmask(iface, &addr);
+	 * net_if_ipv4_set_gw(iface, &addr);
+	 */
+
+	return 0;
+}
+
+int net_init(void)
+{
+	int rc;
+	uint32_t ip4_addr;
+
+	LOG_INF("   Hostname: %s", net_hostname_get());
+
+	ip4_addr = config_bmc_default_ip4();
+	if (ip4_addr) {
+		rc = net_do_set_default_ip4(ip4_addr);
+		if (rc) {
+			LOG_ERR("Static IPv4 init failed");
+			return rc;
+		}
+	}
+
+	rc = dhcp4_init();
+	if (rc) {
+		LOG_ERR("DHCPv4 init failed");
+		return rc;
+	}
+
+	if (config_bmc_use_dhcp4()) {
+		rc = start_dhcp4();
+		if (rc) {
+			LOG_ERR("DHCPv4 start failed");
+			return rc;
+		}
+	}
+
+	return 0;
+}
