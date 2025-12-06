@@ -1,5 +1,6 @@
 stages:
   - build
+  - test
 
 workflow:
   rules:
@@ -41,22 +42,34 @@ variables:
     - source .venv/bin/activate
     - export ZEPHYR_BASE=$PWD/zephyr
 
-
 build:
   stage: build
   <<: *zephyr_setup_template
   script:
     # -p auto: automatically handles pristine builds
     - west build -p auto -b $BOARD ..
+    # hack to prevent CI failure, QEMU build does not create .hex
+    - if [ $BOARD == "qemu_cortex_m3" ] ; then touch build/zephyr/zephyr.hex ; fi
     # copy the build artifacts to the root directory
     - cp build/zephyr/zephyr.elf build/zephyr/zephyr.hex build/zephyr/.config ..
   parallel:
     matrix:
-      - BOARD: [ nucleo_f767zi, hifive_premier_p550_mcu ]
+      - BOARD: [ nucleo_f767zi, hifive_premier_p550_mcu, qemu_cortex_m3 ]
   artifacts:
     paths:
       - zephyr.elf
       - zephyr.hex
       - .config
 
-
+test:
+  stage: test
+  needs:
+    - job: build
+      artifacts: true
+      parallel:
+        matrix:
+          - BOARD: qemu_cortex_m3
+  before_script:
+    - sudo apt-get -qq update && sudo apt-get install -qq telnet socat qemu-system-arm
+  script:
+    - python3 $CI_PROJECT_DIR/scripts/run_qemu_ci.py zephyr.elf
