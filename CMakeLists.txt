@@ -28,6 +28,14 @@ endif()
 target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
 zephyr_linker_sources(SECTIONS sections-rom.ld)
+zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
+  NAME http_resource_desc_web_https_service
+  KVMA RAM_REGION GROUP RODATA_REGION
+)
+zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
+  NAME http_resource_desc_web_http_service
+  KVMA RAM_REGION GROUP RODATA_REGION
+)
 
 # Used for webserver resources
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
@@ -38,6 +46,10 @@ target_sources(app PRIVATE
 	src/main.c
 	src/net.c
 	src/power.c
+)
+
+target_sources_ifdef(CONFIG_HTTP_SERVER app PRIVATE
+	src/http.c
 )
 
 target_sources_ifdef(CONFIG_JTAG app PRIVATE
@@ -53,7 +65,7 @@ target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
 
-if(CONFIG_REDFISH_CRYPTO)
+if(CONFIG_APP_CRYPTO)
   foreach(inc_file
     server_cert.der
     server_privkey.der

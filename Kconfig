@@ -6,8 +6,8 @@ config MAIN_STACK_SIZE
 	int
 	default 4096 if PERSISTENT_STORAGE
 
-config REDFISH_CRYPTO
-	def_bool n
+config APP_CRYPTO
+	bool
 	select MBEDTLS
 	select MBEDTLS_ENABLE_HEAP
 	select NET_SOCKETS_SOCKOPT_TLS
@@ -32,24 +32,29 @@ config REDFISH_CRYPTO
 
 config MBEDTLS_HEAP_SIZE
 	int
-	depends on REDFISH_CRYPTO
+	depends on APP_CRYPTO
 #	Redfish authentication uses about 16500 bytes
 	default 20000
 
 config NET_SOCKETS_TLS_MAX_CONTEXTS
 	int
-	depends on REDFISH_CRYPTO
+	depends on APP_CRYPTO
 	default 4
 
 config MBEDTLS_SSL_MAX_CONTENT_LEN
 	int
-	depends on REDFISH_CRYPTO
+	depends on APP_CRYPTO
 	default 2048
+
+config APP_HTTPS
+	bool "HTTPS supprot for redfish"
+	default y
+	depends on REDFISH
+	select APP_CRYPTO
 
 config REDFISH
 	bool "Redfish server"
 	default y
-	select REDFISH_CRYPTO
 	select HTTP_SERVER
 	select JSON_LIBRARY
 
