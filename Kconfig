@@ -80,6 +80,7 @@ config PERSISTENT_STORAGE
 	# Enable Flash and Flash Map to access memory
 	select FLASH
 	select FLASH_MAP
+	select FLASH_SHELL if SHELL
 	# Writing internal flash that is used for XIP requires
 	# that the flash driver is relocated into RAM.
 	select CODE_DATA_RELOCATION_SRAM
