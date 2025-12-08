@@ -9,6 +9,8 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 #include <zephyr/kernel.h>
 #include <zephyr/net/hostname.h>
 #include <zephyr/sys/reboot.h>
+#include <zephyr/sys/poweroff.h>
+#include <zephyr/shell/shell.h>
 
 #include "fs.h"
 #include "config.h"
@@ -30,9 +32,9 @@ FUNC_NORETURN int bmc_reboot(void)
 	fs_exit();
 
 	LOG_WRN("Rebooting BMC");
-	/* log_flush() appears to be needed in order to get the logs out. */
-	log_flush();
-	k_msleep(1000);
+	/* log_panic() appears to be needed in order to get the logs out. */
+	log_panic();
+	k_msleep(100);
 
 	/*
 	 * It is said that not all platforms support all reboot types.
@@ -44,6 +46,46 @@ FUNC_NORETURN int bmc_reboot(void)
 	k_panic();
 	for (;;);
 }
+
+static FUNC_NORETURN int bmc_poweroff(void)
+{
+	fs_exit();
+
+	LOG_WRN("Poweroff BMC");
+	/* log_panic() appears to be needed in order to get the logs out. */
+	log_panic();
+	k_msleep(100);
+
+#ifdef CONFIG_POWEROFF
+	sys_poweroff();
+	k_panic();
+#endif
+	for (;;);
+}
+
+static int cmd_bmc_reboot(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	bmc_reboot();
+	return 0;
+}
+
+static int cmd_bmc_poweroff(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+	bmc_poweroff();
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmc_cmds,
+	SHELL_CMD(reboot,	NULL, "Reboot BMC.", cmd_bmc_reboot),
+	SHELL_CMD(poweroff,	NULL, "Power off BMC.", cmd_bmc_poweroff),
+	SHELL_SUBCMD_SET_END
+);
+
+SHELL_CMD_REGISTER(bmc, &sub_bmc_cmds, "BMC system commands", NULL);
 
 int main(void)
 {
