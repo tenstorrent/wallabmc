@@ -60,6 +60,10 @@
 			gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
 			label = "ATXPSON";
 		};
+		uartmuxsel: uartmuxsel {
+			gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
+			label = "UARTMUXSEL";
+		};
 	};
 
 
@@ -71,6 +75,7 @@
 		boot1 = &boot1;
 		dcen = &dcen;
 		atxpson = &atxpson;
+		uartmuxsel = &uartmuxsel;
 	};
 };
 
