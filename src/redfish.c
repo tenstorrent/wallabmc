@@ -15,8 +15,11 @@
 #include <zephyr/data/json.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/base64.h>
 #include <stdio.h>
+#include <string.h>
 
+#include "config.h"
 #include "power.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -208,6 +211,81 @@ static const struct json_obj_descr computer_system_descr[] = {
 				    actions, actions_descr),
 };
 
+/* "Basic" (not session based) authentication, uses HTTP Authorization header */
+HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "Authorization");
+
+#define CREDENTIALS_MAX_LEN 64
+static int validate_auth(struct http_client_ctx *client)
+{
+	size_t header_count = client->header_capture_ctx.count;
+	const struct http_header *headers = client->header_capture_ctx.headers;
+	const char *auth_header = NULL;
+	const char *prefix = "Basic ";
+
+	for (unsigned int i = 0; i < header_count; i++) {
+		if (!strcmp(headers[i].name, "Authorization")) {
+			auth_header = headers[i].value;
+			break;
+		}
+	}
+
+	if (auth_header == NULL) {
+		LOG_WRN("No auth header");
+		return -1;
+	}
+
+	if (strncmp(auth_header, prefix, strlen(prefix)) != 0) {
+		LOG_WRN("Not basic auth");
+		return -1; // Not Basic auth
+	}
+
+	// Extract the Base64 token part
+	const char *b64_token = auth_header + strlen(prefix);
+	size_t token_len = strlen(b64_token);
+
+	static uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
+	size_t decoded_len = 0;
+
+	int ret = base64_decode(decoded_buf, sizeof(decoded_buf) - 1, &decoded_len,
+				b64_token, token_len);
+	if (ret < 0) {
+		LOG_WRN("BASE64 decode failed");
+		return ret;
+	}
+
+	// Null-terminate the decoded string for safety
+	decoded_buf[decoded_len] = '\0';
+
+	// Build the expected string "user:pass"
+	static uint8_t expected[CREDENTIALS_MAX_LEN];
+	snprintf(expected, sizeof(expected), "%s:%s", "admin", config_bmc_admin_password());
+
+	if (strcmp((char *)decoded_buf, expected) == 0)
+		return 0; // Success!
+
+	LOG_WRN("Authentication did not match");
+
+	return -1;
+}
+
+/*
+ * XXX: Zephyr could provide a send_http1_401 response to send a
+ * canonical 401 header, but this still seems to work.
+ */
+static void set_unauth_response(struct http_response_ctx *ctx)
+{
+	static struct http_header extra_headers[] = {
+		{ .name = "WWW-Authenticate", .value = "Basic realm=\"BMC\"" },
+	};
+
+	ctx->status = HTTP_401_UNAUTHORIZED;
+	ctx->final_chunk = true;
+	ctx->headers = extra_headers;
+	ctx->header_count = ARRAY_SIZE(extra_headers);
+	ctx->body = NULL;
+	ctx->body_len = 0;
+}
+
 /* Redfish Version: GET /redfish */
 static int redfish_version_handler(struct http_client_ctx *client,
 				   enum http_data_status status,
@@ -219,6 +297,8 @@ static int redfish_version_handler(struct http_client_ctx *client,
 	const struct redfish_version version = {
 		.v1 = "/redfish/v1/"
 	};
+
+	/* Must not require auth */
 
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
@@ -265,6 +345,8 @@ static int service_root_handler(struct http_client_ctx *client,
 			.odata_id = "/redfish/v1/Systems"
 		}
 	};
+
+	/* Must not require auth */
 
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
@@ -313,7 +395,14 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		.members_len = 1
 	};
 
-	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_DATA_ABORTED)
+		return 0;
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
@@ -347,7 +436,14 @@ static int system_info_handler(struct http_client_ctx *client,
 {
 	static char buffer[1024]; // Static to persist for response duration
 
-	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_DATA_ABORTED)
+		return 0;
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
@@ -404,6 +500,12 @@ static int system_reset_handler(struct http_client_ctx *client,
 				struct http_response_ctx *response_ctx,
 				void *user_data)
 {
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
 	if (status == HTTP_SERVER_DATA_ABORTED) {
 		payload_len = 0;
 		return 0;

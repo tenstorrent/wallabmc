@@ -56,7 +56,9 @@ config REDFISH
 	bool "Redfish server"
 	default y
 	select HTTP_SERVER
+	select HTTP_SERVER_CAPTURE_HEADERS
 	select JSON_LIBRARY
+	select BASE64
 
 config NET_MAX_CONTEXTS
 	int
