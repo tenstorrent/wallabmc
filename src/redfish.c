@@ -106,6 +106,18 @@ struct redfish_actions {
 	struct redfish_reset_action reset_action;
 };
 
+/* System Info: ProcessorSummary nested object */
+struct redfish_processor_summary {
+	int32_t count;
+	const char *description;
+};
+
+/* System Info: MemorySummary nested object */
+struct redfish_memory_summary {
+	int32_t total_system_GiB;
+};
+
+
 /* System Info response */
 struct redfish_computer_system {
 	const char *odata_id;
@@ -113,9 +125,13 @@ struct redfish_computer_system {
 	const char *id;
 	const char *uuid;
 	const char *name;
-	const char *description;
+	const char *manufacturer;
+	const char *model;
+	const char *host_name;
 	const char *power_state;
 	const char *serial_number;
+	struct redfish_processor_summary processor_summary;
+	struct redfish_memory_summary memory_summary;
 	struct redfish_actions actions;
 };
 
@@ -189,6 +205,20 @@ static const struct json_obj_descr actions_descr[] = {
 				    reset_action, reset_action_descr),
 };
 
+/* System Info: ProcessorSummary nested object descriptor */
+static const struct json_obj_descr processor_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
+				  count, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Description",
+				  description, JSON_TOK_STRING),
+};
+
+/* System Info: MemorySummary nested object descriptor */
+static const struct json_obj_descr memory_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_memory_summary, "TotalSystemMemoryGiB",
+				  total_system_GiB, JSON_TOK_NUMBER),
+};
+
 /* System Info descriptor */
 static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
@@ -201,12 +231,18 @@ static const struct json_obj_descr computer_system_descr[] = {
 				  uuid, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
 				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Description",
-				  description, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Manufacturer",
+				  manufacturer, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
+				  model, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
 				  power_state, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
 				  serial_number, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "ProcessorSummary",
+				    processor_summary, processor_summary_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "MemorySummary",
+				    memory_summary, memory_summary_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
 };
@@ -453,10 +489,18 @@ static int system_info_handler(struct http_client_ctx *client,
 		.odata_type = "#ComputerSystem.v1_22_0.ComputerSystem",
 		.id = "system",
 		.uuid = "38947555-7742-3448-3784-823347823834",
-		.name = "Atlantis",
-		.description = "Atlantis",
-		.power_state = get_power_state() ? "On" : "Off",
+		.name = "Dev Board 7",
+		.manufacturer = "Tenstorrent",
+		.model = "Atlantis",
+		.processor_summary = {
+			.count = 8,
+			.description = "Tenstorrent Ascalon X™",
+		},
+		.memory_summary = {
+			.total_system_GiB = 32,
+		},
 		.serial_number = serial_number,
+		.power_state = get_power_state() ? "On" : "Off",
 		.actions = {
 			.reset_action = {
 				.target = "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
