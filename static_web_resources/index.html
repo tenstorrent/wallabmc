@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Custom BMC Dashboard</title>
+	<!-- alternatively this could use the included static artifacts but they are very big -->
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+	<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-attach@0.9.0/lib/xterm-addon-attach.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+	<style>
+		/* Minimal CSS for a clean look */
+		:root { --primary: #007bff; --danger: #dc3545; --bg: #f4f7f6; --card: #ffffff; }
+		body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; }
+		.container { max-width: 800px; margin: auto; }
+		.logo { padding: 5px; width: 256px; }
+		.card { background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+		h1, h2 { margin-top: 0; }
+
+		/* Login Form Styles */
+		.login-form { display: flex; flex-direction: column; gap: 10px; max-width: 300px; margin: auto; }
+		input, button { padding: 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 16px; }
+		button { background: var(--primary); color: white; border: none; cursor: pointer; transition: background 0.2s; }
+		button:hover { background: #0056b3; }
+
+		/* Dashboard Styles */
+		.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+		.info-item label { display: block; font-weight: bold; color: #666; font-size: 0.9em; }
+		.serial-num { display: inline-block; padding: 5px 10px; border-radius: 15px; font-weight: bold; background: #eee; }
+		.power-state { display: inline-block; padding: 5px 10px; border-radius: 15px; font-weight: bold; background: #eee; }
+		.power-state.On { background: #d4edda; color: #155724; }
+		.power-state.Off { background: #f8d7da; color: #721c24; }
+
+		.controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px; }
+		button.danger { background: var(--danger); }
+		button.danger:hover { background: #a71d2a; }
+
+		#loading-bar { height: 4px; background: var(--primary); width: 0%; transition: width 0.3s; position: fixed; top: 0; left: 0; }
+
+		.hidden { display: none !important; }
+	</style>
+</head>
+<body>
+	<div id="loading-bar"></div>
+	<div class="logo">
+		<img src="logo.jpeg" alt="WallaBMC">
+	</div>
+	<div class="container">
+		<div id="login-section" class="card">
+			<h2>WallaBMC Authentication</h2>
+			<p>Factory default is admin/admin</p>
+			<form class="login-form" onsubmit="event.preventDefault(); connectToBmc();">
+				<input type="text" id="username" placeholder="Username">
+				<input type="password" id="password" placeholder="Password">
+				<button type="submit">Login</button>
+			</form>
+			<p id="login-error" style="color: var(--danger);" class="hidden"></p>
+		</div>
+
+		<div id="dashboard-section" class="hidden">
+
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+				<button onclick="logout()" style="background: #6c757d;">Logout</button>
+				<button onclick="openTerminal()" style="background: #333; margin-right: 10px;">Terminal</button>
+			</div>
+
+			<div class="card">
+				<h1>System Overview</h1>
+				<p>
+				  UUID: <span id="sys-uuid" class="serial-num">Loading...</span>
+				  Serial: <span id="sys-serial" class="serial-num">Loading...</span>
+				</p>
+				<div class="info-grid">
+					<div class="info-item"><label>Name</label><span id="sys-name">Loading...</span></div>
+					<div class="info-item"><label>Manufacturer</label><span id="sys-manufacturer">Loading...</span></div>
+					<div class="info-item"><label>Model</label><span id="sys-model">Loading...</span></div>
+					<div class="info-item"><label>CPU</label><span id="sys-cpu-description">Loading...</span></div>
+					<div class="info-item"><label>CPU Count</label><span id="sys-cpu">Loading...</span></div>
+					<div class="info-item"><label>Total Memory</label><span id="sys-memory">Loading...</span></div>
+				</div>
+			</div>
+
+			<div class="card">
+				<h2>Power Control</h2>
+				<p>Current State: <span id="power-state-badge" class="power-state">Unknown</span></p>
+
+				<div class="controls-grid">
+					<button onclick="sendPowerAction('On')">Power On</button>
+					<button class="danger" onclick="sendPowerAction('GracefulShutdown')">Graceful Shutdown</button>
+					<button class="danger" onclick="sendPowerAction('ForceOff')">Force Off</button>
+					<button class="danger" onclick="sendPowerAction('ForceRestart')">Force Restart</button>
+					<button onclick="refreshSystemData()">Refresh Status</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// --- Global Variables ---
+		let basicAuthHeader = null;
+		// The specific URI for the main computer system (e.g., /redfish/v1/Systems/1)
+		// We will auto-discover this.
+		let systemIdPath = null;
+
+		let refreshTimer = null;
+
+		// --- UI Helpers ---
+		const show = (id) => document.getElementById(id).classList.remove('hidden');
+		const hide = (id) => document.getElementById(id).classList.add('hidden');
+		const setText = (id, text) => document.getElementById(id).innerText = text || 'N/A';
+		const setLoading = (isLoading) => document.getElementById('loading-bar').style.width = isLoading ? '100%' : '0%';
+
+		// --- Core Redfish API Fetcher ---
+		async function redfishCall(path, method = 'GET', body = null) {
+			setLoading(true);
+			try {
+				const options = {
+					method: method,
+					headers: {
+						// We use Basic Auth for simplicity in this standalone file.
+						'Authorization': basicAuthHeader,
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					}
+				};
+				if (body) options.body = JSON.stringify(body);
+
+				// NOTE: Because we are serving this HTML FROM the BMC,
+				// we can use relative paths (e.g., '/redfish/v1/Systems').
+				const response = await fetch(path, options);
+
+				if (!response.ok) {
+					if (response.status === 401) throw new Error("Authentication Failed");
+					throw new Error(`Redfish Error: ${response.status}`);
+				}
+
+				// 204 No Content is common for successful POST actions (like Power On)
+				if (response.status === 204) return null;
+
+				return await response.json();
+			} finally {
+				setLoading(false);
+			}
+		}
+
+		// --- Main Logic ---
+
+		async function connectToBmc() {
+			const user = document.getElementById('username').value;
+			const pass = document.getElementById('password').value;
+			if(!user || !pass) return;
+
+			// Create the Basic Auth header string once and store it
+			basicAuthHeader = 'Basic ' + btoa(user + ":" + pass);
+			hide('login-error');
+
+			try {
+				// Step 1: Discover the System ID URI
+				// We fetch the root systems collection to find the actual ID (it's not always '1')
+				const systemsRoot = await redfishCall('/redfish/v1/Systems');
+
+				if (!systemsRoot.Members || systemsRoot.Members.length === 0) {
+					throw new Error("No ComputerSystem instances found on this BMC.");
+				}
+
+				// Grab the first system found.
+				systemIdPath = systemsRoot.Members[0]['@odata.id'];
+				console.log(`System discovered at: ${systemIdPath}`);
+
+				// Step 2: Switch UI
+				hide('login-section');
+				show('dashboard-section');
+
+				// Step 3: Load initial data
+				await refreshSystemData();
+
+			} catch (err) {
+				show('login-error');
+				setText('login-error', err.message);
+				basicAuthHeader = null; // Reset on failure
+			}
+		}
+
+		function logout() {
+			if (refreshTimer) clearTimeout(refreshTimer);
+			refreshTimer = null;
+
+			closeTerminal() /* Term might be open */
+
+			basicAuthHeader = null;
+			systemIdPath = null;
+
+			document.getElementById('password').value = '';
+			setText('power-state-badge', 'Unknown');
+
+			hide('dashboard-section');
+			show('login-section');
+		}
+
+		async function refreshSystemData() {
+			if(!systemIdPath) return;
+
+			try {
+				if (refreshTimer) clearTimeout(refreshTimer);
+				refreshTimer = null;
+
+				// Fetch the main system object
+				const data = await redfishCall(systemIdPath);
+
+				// Populate Inventory
+				setText('sys-uuid', data.UUID);
+				setText('sys-serial', data.SerialNumber);
+				setText('sys-name', data.Name);
+				setText('sys-manufacturer', data.Manufacturer);
+				setText('sys-model', data.Model);
+				setText('sys-memory', data.MemorySummary ? `${data.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
+				setText('sys-cpu', data.ProcessorSummary ? data.ProcessorSummary.Count : 'N/A');
+				setText('sys-cpu-description', data.ProcessorSummary ? data.ProcessorSummary.Description : 'N/A');
+
+				// Update Power State UI
+				const pstate = document.getElementById('power-state-badge');
+				setText('power-state-badge', data.PowerState);
+				// Reset classes and add the current state class for coloring
+				pstate.className = 'power-state ' + data.PowerState.replace(/\s/g, '');
+
+				refreshTimer = setTimeout(refreshSystemData, 10000);
+
+			} catch (err) {
+				alert("Failed to refresh data: " + err.message);
+			}
+		}
+
+		async function sendPowerAction(resetType) {
+			if(resetType != 'On' && (!systemIdPath || !confirm(`Are you sure you want to send power command: ${resetType}?`))) return;
+
+			try {
+				// Construct the action URI.
+				// Standard Redfish is SystemURI + "/Actions/ComputerSystem.Reset"
+				// A highly robust client would dynamically read the 'Actions' property from the system response,
+				// but hardcoding the standard path usually works for simple BMCs.
+				const actionUri = `${systemIdPath}/Actions/ComputerSystem.Reset`;
+
+				console.log(`Sending ${resetType} to ${actionUri}`);
+
+				await redfishCall(actionUri, 'POST', { "ResetType": resetType });
+
+				// Poll for status update after a few seconds
+				if (refreshTimer) clearTimeout(refreshTimer);
+				refreshTimer = setTimeout(refreshSystemData, 3000);
+
+			} catch (err) {
+				 alert(`Failed to execute power action: ${err.message}`);
+			}
+		}
+	</script>
+</body>
+</html>

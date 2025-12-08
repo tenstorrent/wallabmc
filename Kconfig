@@ -47,9 +47,9 @@ config MBEDTLS_SSL_MAX_CONTENT_LEN
 	default 2048
 
 config APP_HTTPS
-	bool "HTTPS supprot for redfish"
+	bool "HTTPS supprot for web and redfish"
 	default y
-	depends on REDFISH
+	depends on REDFISH || APP_WEB
 	select APP_CRYPTO
 
 config REDFISH
@@ -59,6 +59,12 @@ config REDFISH
 	select HTTP_SERVER_CAPTURE_HEADERS
 	select JSON_LIBRARY
 	select BASE64
+
+config APP_WEB
+	bool "Web server"
+	default y
+	select HTTP_SERVER
+	select REDFISH
 
 config NET_MAX_CONTEXTS
 	int

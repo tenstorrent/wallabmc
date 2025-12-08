@@ -52,6 +52,10 @@ target_sources_ifdef(CONFIG_HTTP_SERVER app PRIVATE
 	src/http.c
 )
 
+target_sources_ifdef(CONFIG_APP_WEB app PRIVATE
+	src/web.c
+)
+
 target_sources_ifdef(CONFIG_JTAG app PRIVATE
 	src/jtag.c
 )
@@ -64,6 +68,19 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
+
+if(CONFIG_APP_WEB)
+  foreach(web_resource
+    index.html
+    logo.jpeg
+  )
+    generate_inc_file_for_target(app
+      static_web_resources/${web_resource}
+      ${gen_dir}/${web_resource}.gz.inc
+      --gzip
+    )
+  endforeach()
+endif()
 
 if(CONFIG_APP_CRYPTO)
   foreach(inc_file
