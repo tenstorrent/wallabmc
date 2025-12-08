@@ -16,8 +16,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <stdio.h>
-#include "redfish.h"
-#include "certificate.h"
+
 #include "power.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -208,21 +207,6 @@ static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
 };
-
-static uint16_t redfish_http_port = 80;
-
-HTTP_SERVICE_DEFINE(redfish_http_service, NULL, &redfish_http_port, 2, 5,
-		    NULL, NULL, NULL);
-
-static const sec_tag_t sec_tag_list_verify_none[] = {
-	HTTP_SERVER_CERTIFICATE_TAG,
-};
-
-static uint16_t redfish_https_port = 443;
-
-HTTPS_SERVICE_DEFINE(redfish_https_service, NULL, &redfish_https_port,
-		     2, 5, NULL, NULL, NULL, sec_tag_list_verify_none,
-		     sizeof(sec_tag_list_verify_none));
 
 /* Redfish Version: GET /redfish */
 static int redfish_version_handler(struct http_client_ctx *client,
@@ -480,11 +464,6 @@ static struct http_resource_detail_dynamic version_detail = {
 	.cb = redfish_version_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_version, redfish_http_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_https, redfish_https_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash, redfish_http_service, "/redfish", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, redfish_https_service, "/redfish", &version_detail);
-
 // Root
 static struct http_resource_detail_dynamic root_detail = {
 	.common = {
@@ -494,14 +473,6 @@ static struct http_resource_detail_dynamic root_detail = {
 	.cb = service_root_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_root, redfish_http_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_https, redfish_https_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash, redfish_http_service, "/redfish/v1",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, redfish_https_service, "/redfish/v1",
-		&root_detail);
 
 // Systems Collection Registration
 static struct http_resource_detail_dynamic systems_coll_detail = {
@@ -512,10 +483,6 @@ static struct http_resource_detail_dynamic systems_coll_detail = {
 	.cb = systems_collection_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_systems_coll, redfish_http_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
-HTTP_RESOURCE_DEFINE(redfish_systems_coll_https, redfish_https_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
 
 // System
 static struct http_resource_detail_dynamic sys_detail = {
@@ -526,10 +493,6 @@ static struct http_resource_detail_dynamic sys_detail = {
 	.cb = system_info_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_sys, redfish_http_service,
-		"/redfish/v1/Systems/system", &sys_detail);
-HTTP_RESOURCE_DEFINE(redfish_sys_https, redfish_https_service,
-		"/redfish/v1/Systems/system", &sys_detail);
 
 // Action
 static struct http_resource_detail_dynamic action_detail = {
@@ -540,39 +503,33 @@ static struct http_resource_detail_dynamic action_detail = {
 	.cb = system_reset_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_action, redfish_http_service,
+
+HTTP_RESOURCE_DEFINE(redfish_version, http_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash, http_service, "/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root, http_service, "/redfish/v1/",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash, http_service, "/redfish/v1",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_coll, http_service,
+		"/redfish/v1/Systems", &systems_coll_detail);
+HTTP_RESOURCE_DEFINE(redfish_sys, http_service,
+		"/redfish/v1/Systems/system", &sys_detail);
+HTTP_RESOURCE_DEFINE(redfish_action, http_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
-HTTP_RESOURCE_DEFINE(redfish_action_https, redfish_https_service,
+
+#if defined(CONFIG_APP_HTTPS)
+HTTP_RESOURCE_DEFINE(redfish_version_https, https_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, https_service, "/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_https, https_service, "/redfish/v1/",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, https_service, "/redfish/v1",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_coll_https, https_service,
+		"/redfish/v1/Systems", &systems_coll_detail);
+HTTP_RESOURCE_DEFINE(redfish_sys_https, https_service,
+		"/redfish/v1/Systems/system", &sys_detail);
+HTTP_RESOURCE_DEFINE(redfish_action_https, https_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
-
-static void setup_tls(void)
-{
-	int err;
-
-	err = tls_credential_add(HTTP_SERVER_CERTIFICATE_TAG,
-			TLS_CREDENTIAL_PUBLIC_CERTIFICATE,
-			server_certificate,
-			sizeof(server_certificate));
-	if (err < 0) {
-		LOG_ERR("Failed to register public certificate: %d", err);
-	}
-
-	err = tls_credential_add(HTTP_SERVER_CERTIFICATE_TAG,
-			TLS_CREDENTIAL_PRIVATE_KEY,
-			private_key, sizeof(private_key));
-	if (err < 0) {
-		LOG_ERR("Failed to register private key: %d", err);
-	}
-}
-
-int redfish_init(void)
-{
-	LOG_INF("Starting Redfish HTTP server");
-
-	setup_tls();
-	http_server_start();
-
-	return 0;
-}
+#endif /* defined(CONFIG_APP_HTTPS) */
