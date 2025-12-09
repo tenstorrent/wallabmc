@@ -21,6 +21,8 @@ static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
 #define MAX_HOSTNAME_LEN 31
 
+#define MAX_PW_LEN 31
+
 /*
  * Add fields to the end, do not remove or change meaning.
  * Ignoring is okay if a field becomes unused, but gracefully
@@ -34,6 +36,7 @@ struct config_data {
 	uint32_t bmc_default_ip4;
 	uint8_t bmc_use_dhcp4;
 	uint8_t host_auto_poweron;
+	char bmc_admin_password[MAX_PW_LEN + 1]; /* NULL terminated */
 } __packed;
 
 static struct config_data config_data;
@@ -54,6 +57,11 @@ bool config_bmc_use_dhcp4(void)
 bool config_host_auto_poweron(void)
 {
 	return config_data.host_auto_poweron;
+}
+
+const char *config_bmc_admin_password(void)
+{
+	return config_data.bmc_admin_password;
 }
 
 static bool config_exists(void)
@@ -300,7 +308,29 @@ static int cmd_config_bmc_dhcp4(const struct shell *sh, size_t argc, char **argv
 	return 0;
 }
 
+#define CMD_HELP_BMC_ADMIN_PASSWORD		\
+	"BMC admin password\n"			\
+	"Usage: bmc password <pw>"
+
+static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	strncpy(config_data.bmc_admin_password, argv[1], MAX_PW_LEN);
+	shell_info(sh, "BMC admin password updated");
+
+	config_dirty = true;
+
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
+	SHELL_CMD_ARG(password,		NULL, CMD_HELP_BMC_ADMIN_PASSWORD, cmd_config_bmc_password, 2, 0),
 	SHELL_CMD_ARG(hostname,		NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
 	SHELL_CMD_ARG(ipv4_addr,	NULL, CMD_HELP_BMC_DEFAULT_IP4, cmd_config_bmc_default_ip4, 2, 0),
 	SHELL_CMD_ARG(dhcpv4,		NULL, CMD_HELP_BMC_DHCP4, cmd_config_bmc_dhcp4, 2, 0),
@@ -489,6 +519,10 @@ int config_init(void)
 	else
 		config_data.host_auto_poweron = 0; /* Default to disabled */
 
+	if (!IS_ONDISK(bmc_admin_password)) {
+		/* This defaults to "admin" */
+		strncpy(config_data.bmc_admin_password, "admin", MAX_HOSTNAME_LEN);
+	}
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
