@@ -232,6 +232,7 @@ static int redfish_version_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode redfish version: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -277,6 +278,7 @@ static int service_root_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode service root: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -322,6 +324,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode systems collection: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -377,6 +380,7 @@ static int system_info_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode computer system: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -407,6 +411,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 	if (client->method != HTTP_POST) {
 		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -418,6 +423,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 		} else {
 			LOG_ERR("Payload too large");
 			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
 			return 0;
 		}
 	}
@@ -431,6 +437,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 		if (ret < 0) {
 			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
 		} else {
 			LOG_INF("Reset Action: %s", payload.reset_type);
 
