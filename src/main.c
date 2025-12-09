@@ -90,7 +90,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmc_cmds,
 SHELL_CMD_REGISTER(bmc, &sub_bmc_cmds, "BMC system commands", NULL);
 
 #if defined(CONFIG_RTC)
-static int init_rtc(void)
+static int rtc_init(void)
 {
 	static const struct device *rtc = DEVICE_DT_GET(DT_NODELABEL(rtc));
 	static struct rtc_time tm;
@@ -120,7 +120,7 @@ static int init_rtc(void)
 		return ret;
 	}
 
-	LOG_INF("RTC date and time: %04d-%02d-%02d %02d:%02d:%02d",
+	LOG_INF("RTC: %04d-%02d-%02d %02d:%02d:%02d",
 		tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 		tm.tm_hour, tm.tm_min, tm.tm_sec);
 
@@ -140,63 +140,75 @@ static int init_rtc(void)
 	return ret;
 }
 #else /* defined(CONFIG_RTC) */
-static inline int init_rtc(void) { return 0; }
+static inline int rtc_init(void) { return 0; }
 #endif /* defined(CONFIG_RTC) */
 
 int main(void)
 {
 	LOG_INF("Atlantis BMC project git SHA1: %s", PROJECT_GIT_SHA);
 
-	if (init_rtc() < 0) {
+	LOG_DBG("RTC init");
+	if (rtc_init() < 0) {
 		LOG_ERR("RTC init failed");
 		return -1;
 	}
 
+	LOG_DBG("Filesystem init");
 	if (fs_init() < 0) {
 		LOG_ERR("Filesystem init failed, continuing without persistent storage");
 	}
 
+	LOG_DBG("Config init");
 	if (config_init() < 0) {
 		LOG_ERR("Config init failed");
 		return -1;
 	}
 
+	LOG_DBG("Button init");
 	if (button_init() < 0) {
 		LOG_ERR("Button init failed");
 		/* Continue */
 	}
 
+	LOG_DBG("Network init");
 	if (net_init() < 0) {
 		LOG_ERR("Network init failed");
 		return -1;
 	}
 
+	LOG_DBG("Power init");
 	if (power_init() < 0) {
 		LOG_ERR("Power init failed");
 		return -1;
 	}
 
+	LOG_DBG("Reset init");
 	if (reset_init() < 0) {
 		LOG_ERR("Reset init failed");
 		return -1;
 	}
 
+	LOG_DBG("LED init");
 	if (status_led_init() < 0) {
 		LOG_ERR("LED init failed");
 		return -1;
 	}
 
+	LOG_DBG("JTAG init");
 	if (jtag_init() < 0) {
 		LOG_ERR("JTAG init failed");
 		return -1;
 	}
 
+	LOG_DBG("HTTP server init");
 	if (app_http_server_init() < 0) {
 		LOG_ERR("HTTP server init failed");
 		return -1;
 	}
 
 	boot_finished = true;
+
+	LOG_INF("BMC boot complete");
 
 	return 0;
 }
