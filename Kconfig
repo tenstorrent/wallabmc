@@ -30,21 +30,57 @@ config APP_CRYPTO
 	select PSA_WANT_ALG_CHACHA20_POLY1305
 	select PSA_WANT_KEY_TYPE_CHACHA20
 
+config APP_CRYPTO_DEBUG
+	bool
+	default n
+	select MBEDTLS_DEBUG
+	select MBEDTLS_MEMORY_DEBUG
+
+config MBEDTLS_DEBUG_LEVEL
+	int
+	depends on APP_CRYPTO_DEBUG
+	default 1
+
 config MBEDTLS_HEAP_SIZE
 	int
 	depends on APP_CRYPTO
-#	Redfish authentication uses about 16500 bytes
-	default 20000
+	default 49152
+
+config NET_PKT_RX_COUNT
+	int
+	depends on APP_CRYPTO
+	default 32
+
+config NET_PKT_TX_COUNT
+	int
+	depends on APP_CRYPTO
+	default 32
+
+config NET_BUF_RX_COUNT
+	int
+	default 64 if APP_CRYPTO
+	default 48
+
+config NET_BUF_TX_COUNT
+	int
+	default 64 if APP_CRYPTO
+	default 48
 
 config NET_SOCKETS_TLS_MAX_CONTEXTS
 	int
 	depends on APP_CRYPTO
-	default 4
+	default 6
 
+# The Kconfig comments for this option say TLS standards require
+# 16k size, but this requires several 16K allocations each for
+# send and recv on the heap so it's too large. Apparently browsers
+# negotiate smaller sizes, so 1500 should be okay there. Redfish
+# and curl with auth headers seem to require more (4096 works).
+# may require more?
 config MBEDTLS_SSL_MAX_CONTENT_LEN
 	int
 	depends on APP_CRYPTO
-	default 2048
+	default 4096
 
 config APP_HTTPS
 	bool "HTTPS supprot for web and redfish"
@@ -74,13 +110,46 @@ config APP_WEB_TERMINAL
 	select SHELL_BACKEND_WEBSOCKET
 	select LOG_BACKEND_WS
 	select LOG_BACKEND_WS_AUTOSTART
-	#NET_TCP_WORKQ_STACK_SIZE=2048
+
+config SYSTEM_WORKQUEUE_STACK_SIZE
+	int
+	depends on HTTP_SERVER_WEBSOCKET
+	default 2560 if APP_HTTPS
+	default 1536
 
 # WS log backend uses lot of stack
 config LOG_PROCESS_THREAD_STACK_SIZE
 	int
 	depends on LOG_BACKEND_WS
+	default 2560
+
+config NET_TCP_MAX_RECV_WINDOW_SIZE
+	int
+	default 20480
+
+# Increase retry and timeout limits
+config NET_TCP_INIT_RETRANSMISSION_TIMEOUT
+	int
+	default 500
+
+config NET_TCP_RETRY_COUNT
+	int
+	default 10
+
+config SHELL_STACK_SIZE
+	int
+	depends on SHELL_BACKEND_WEBSOCKET
+	default 3072
+
+config HTTP_SERVER_STACK_SIZE
+	int
+	depends on LOG_BACKEND_WS
 	default 4096
+
+config NET_SOCKETS_SERVICE_STACK_SIZE
+	int
+	default 3072 if APP_CRYPTO
+	default 1536
 
 config NET_MAX_CONTEXTS
 	int
@@ -139,5 +208,13 @@ config JTAG_DAEMON_PRIORITY
 	default 5
 
 endif
+
+# use `kernel thread stack` shell command
+config APP_STACK_DEBUG
+	bool
+	default n
+	select THREAD_NAME
+	select THREAD_ANALYZER
+	select THREAD_ANALYZER_RUN_UNLOCKED
 
 source "Kconfig.zephyr"
