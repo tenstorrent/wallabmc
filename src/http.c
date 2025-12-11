@@ -23,7 +23,7 @@ LOG_MODULE_REGISTER(http_server, LOG_LEVEL_DBG);
 
 static uint16_t http_service_port = 80;
 HTTP_SERVICE_DEFINE(http_service, NULL, &http_service_port,
-		    2, 5, NULL, NULL, NULL);
+		    3, 10, NULL, NULL, NULL);
 
 #if defined(CONFIG_SHELL_BACKEND_WEBSOCKET)
 DEFINE_WEBSOCKET_SERVICE(http_service);
@@ -41,7 +41,7 @@ static const sec_tag_t sec_tag_list_verify_none[] = {
 
 static uint16_t https_service_port = 443;
 HTTPS_SERVICE_DEFINE(https_service, NULL, &https_service_port,
-		     2, 5, NULL, NULL, NULL, sec_tag_list_verify_none,
+		     3, 10, NULL, NULL, NULL, sec_tag_list_verify_none,
 		     sizeof(sec_tag_list_verify_none));
 
 #if defined(CONFIG_SHELL_BACKEND_WEBSOCKET)
