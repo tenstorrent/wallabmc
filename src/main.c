@@ -145,6 +145,8 @@ static inline int init_rtc(void) { return 0; }
 
 int main(void)
 {
+	LOG_INF("Atlantis BMC project git SHA1: %s", PROJECT_GIT_SHA);
+
 	if (init_rtc() < 0) {
 		LOG_ERR("RTC init failed");
 		return -1;
