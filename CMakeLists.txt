@@ -6,6 +6,24 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(atlantis-bmc)
 
+# Get project git SHA1 if not provided via CMake variable
+if(NOT DEFINED PROJECT_GIT_SHA)
+	# Use the shell script to get git SHA1
+	find_program(BASH_EXECUTABLE bash)
+	if(BASH_EXECUTABLE)
+		execute_process(
+			COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/get_project_git_sha.sh ${CMAKE_CURRENT_SOURCE_DIR}
+			OUTPUT_VARIABLE PROJECT_GIT_SHA
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			ERROR_QUIET
+		)
+	endif()
+	# Fallback to "unknown" if script didn't work
+	if(NOT DEFINED PROJECT_GIT_SHA OR PROJECT_GIT_SHA STREQUAL "")
+		set(PROJECT_GIT_SHA "unknown")
+	endif()
+endif()
+
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 
 target_sources(app PRIVATE
@@ -28,6 +46,9 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
+
+# Define project git SHA1 as compile-time string constant
+target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
 if(CONFIG_REDFISH_CRYPTO)
   set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
