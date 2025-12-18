@@ -7,6 +7,7 @@
 LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
+#include <zephyr/version.h>
 #include <zephyr/drivers/rtc.h>
 #include <zephyr/sys/timeutil.h>
 #include <zephyr/net/hostname.h>
@@ -27,6 +28,32 @@ static bool boot_finished = false;
 bool is_boot_finished(void)
 {
 	return boot_finished;
+}
+
+/* Taken from zephyr/kernel/banner.c */
+#if defined(BUILD_VERSION) && !IS_EMPTY(BUILD_VERSION)
+#define BANNER_VERSION STRINGIFY(BUILD_VERSION)
+#else
+#define BANNER_VERSION KERNEL_VERSION_STRING
+#endif /* BUILD_VERSION */
+
+static void print_banner(void)
+{
+	int pad = 20;
+
+	printk("\n");
+	printk("%*s    +---------------------+\n", pad, "");
+	printk("%*s    | Welcome to WallaBMC |\n", pad, "");
+	printk("%*s    +---------------------+\n", pad, "");
+	printk("%*s                 \\\n", pad, "");
+	printk("%*s                   \\     /)\n", pad, "");
+	printk("%*s                      <.' \\_\n", pad, "");
+	printk("%*s                        / ( )\\\n", pad, "");
+	printk("%*s                        __|/  \\__\n", pad, "");
+	printk("%*s.,.,.,,,..,,.,.,.,.,..,,.,.,.,,.,..,,.,.,.,.\n", pad, "");
+
+	LOG_INF("Project build: %s", PROJECT_GIT_SHA);
+	LOG_INF("Zephyr OS build: %s", BANNER_VERSION);
 }
 
 FUNC_NORETURN int bmc_reboot(void)
@@ -145,7 +172,7 @@ static inline int rtc_init(void) { return 0; }
 
 int main(void)
 {
-	LOG_INF("Atlantis BMC project git SHA1: %s", PROJECT_GIT_SHA);
+	print_banner();
 
 	LOG_DBG("RTC init");
 	if (rtc_init() < 0) {
