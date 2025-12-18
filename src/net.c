@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(stm32_bmc_net, LOG_LEVEL_INF);
 #include <errno.h>
 #include <stdio.h>
 
+#include <zephyr/net/net_config.h>
 #include <zephyr/net/net_if.h>
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_context.h>
@@ -85,8 +86,6 @@ int net_init(void)
 	int rc;
 	uint32_t ip4_addr;
 
-	LOG_INF("   Hostname: %s", net_hostname_get());
-
 	ip4_addr = config_bmc_default_ip4();
 	if (ip4_addr) {
 		rc = net_do_set_default_ip4(ip4_addr);
@@ -102,13 +101,23 @@ int net_init(void)
 		return rc;
 	}
 
-	if (config_bmc_use_dhcp4()) {
-		rc = start_dhcp4();
-		if (rc) {
-			LOG_ERR("DHCPv4 start failed");
-			return rc;
-		}
+	rc = net_config_init_app(NULL, "Initializing network");
+	if (rc) {
+		LOG_ERR("Network init failed");
+		return rc;
 	}
+
+	/*
+	 * Net init always starts dhcp if it is in the Kconfig.
+	 * Stop it if our config does not want it. This is
+	 * somewhat hacky.
+	 */
+	if (!config_bmc_use_dhcp4()) {
+		if (stop_dhcp4())
+			LOG_ERR("DHCPv4 stop failed, continuing");
+	}
+
+	LOG_INF("Network hostname: %s", net_hostname_get());
 
 	return 0;
 }
