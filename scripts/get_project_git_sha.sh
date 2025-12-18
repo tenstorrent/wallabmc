@@ -12,12 +12,6 @@ fi
 
 PROJECT_DIR="${1:-${CI_PROJECT_DIR:-.}}"
 
-PROJECT_GIT_SHA=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null) || exit 1
-# Check if working directory is dirty and append -dirty tag if so
-if [ "$PROJECT_GIT_SHA" != "unknown" ]; then
-	if ! git -C "$PROJECT_DIR" diff --quiet 2>/dev/null; then
-		PROJECT_GIT_SHA="${PROJECT_GIT_SHA}-dirty"
-	fi
-fi
+PROJECT_GIT_SHA=$(git -C "$PROJECT_DIR" describe --long --dirty --always 2>/dev/null) || exit 1
 
 echo "$PROJECT_GIT_SHA"
