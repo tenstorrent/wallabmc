@@ -19,6 +19,21 @@
         };
     };
 
+    // XXX: Unclear whether this is required since we specify a bunch of these
+    // attributes in code when mounting.
+    fstab {
+        compatible = "zephyr,fstab";
+        lfs1: lfs1 {
+            compatible = "zephyr,fstab,littlefs";
+            mount-point = "/lfs";
+            partition = <&storage_partition>;
+            read-size = <16>;
+            prog-size = <16>;
+            cache-size = <64>;
+            lookahead-size = <32>;
+            block-cycles = <512>;
+        };
+    };
     aliases {
         jtagtck = &jtagtck;
         jtagtms = &jtagtms;
@@ -38,4 +53,29 @@
 
 &rng {
     status = "okay";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/*
+		 * Sectors 0-3 (4*16 kbytes) + 4 (64 kbytes) + 5 (128 kbytes)
+		 * are for the application image.
+		 */
+		slot0_partition: partition@0 {
+			label = "image-0";
+			reg = <0x00000000 DT_SIZE_K(256)>;
+		};
+
+		/*
+		 * Sector 6-7 (2*128 kbyte) are for application persistent storage.
+		 */
+		storage_partition: partition@40000 {
+			label = "storage";
+			reg = <0x00040000 DT_SIZE_K(256)>;
+		};
+	};
 };
