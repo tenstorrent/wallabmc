@@ -46,7 +46,7 @@ void set_power_state(bool on)
 }
 
 static const struct http_header json_header[] = {
-	{.name = "Content-Type", .value = "application/json"}
+	{.name = "content-type", .value = "application/json"}
 };
 
 struct redfish_reset_payload {
@@ -250,7 +250,7 @@ static const struct json_obj_descr computer_system_descr[] = {
 };
 
 /* "Basic" (not session based) authentication, uses HTTP Authorization header */
-HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "Authorization");
+HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "authorization");
 
 #define CREDENTIALS_MAX_LEN 64
 static int validate_auth(struct http_client_ctx *client)
@@ -261,7 +261,7 @@ static int validate_auth(struct http_client_ctx *client)
 	const char *prefix = "Basic ";
 
 	for (unsigned int i = 0; i < header_count; i++) {
-		if (!strcmp(headers[i].name, "Authorization")) {
+		if (!strcmp(headers[i].name, "authorization")) {
 			auth_header = headers[i].value;
 			break;
 		}
@@ -313,7 +313,7 @@ static int validate_auth(struct http_client_ctx *client)
 static void set_unauth_response(struct http_response_ctx *ctx)
 {
 	static struct http_header extra_headers[] = {
-		{ .name = "WWW-Authenticate", .value = "Basic realm=\"BMC\"" },
+		{ .name = "www-authenticate", .value = "Basic realm=\"BMC\"" },
 	};
 
 	ctx->status = HTTP_401_UNAUTHORIZED;

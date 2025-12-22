@@ -55,6 +55,7 @@ config APP_CRYPTO
 	select MBEDTLS_CHACHA20_POLY1305_ENABLED
 	select MBEDTLS_ECP_DP_SECP256R1_ENABLED
 	select MBEDTLS_ECDSA_DETERMINISTIC
+	select MBEDTLS_SSL_ALPN
 
 config APP_CRYPTO_DEBUG
 	bool
@@ -112,6 +113,7 @@ config APP_HTTPS
 	bool "HTTPS supprot for web and redfish"
 	default y
 	depends on REDFISH || APP_WEB
+	select HTTP_SERVER_TLS_USE_ALPN
 	select APP_CRYPTO
 
 config REDFISH

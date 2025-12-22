@@ -175,9 +175,9 @@
 					method: method,
 					headers: {
 						// We use Basic Auth for simplicity in this standalone file.
-						'Authorization': basicAuthHeader,
-						'Accept': 'application/json',
-						'Content-Type': 'application/json'
+						'authorization': basicAuthHeader,
+						'accept': 'application/json',
+						'content-type': 'application/json'
 					}
 				};
 				if (body) options.body = JSON.stringify(body);
