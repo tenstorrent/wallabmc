@@ -34,7 +34,7 @@ static void start_dhcpv4_client(struct net_if *iface, void *user_data)
 {
 	ARG_UNUSED(user_data);
 
-	LOG_INF("Start on %s: index=%d", net_if_get_device(iface)->name,
+	LOG_INF("Start on %s[%d]", net_if_get_device(iface)->name,
 		net_if_get_by_iface(iface));
 	net_dhcpv4_start(iface);
 }
@@ -43,7 +43,7 @@ static void restart_dhcpv4_client(struct net_if *iface, void *user_data)
 {
 	ARG_UNUSED(user_data);
 
-	LOG_INF("Restart on %s: index=%d", net_if_get_device(iface)->name,
+	LOG_INF("Restart on %s[%d]", net_if_get_device(iface)->name,
 		net_if_get_by_iface(iface));
 	net_dhcpv4_restart(iface);
 }
@@ -52,7 +52,7 @@ static void stop_dhcpv4_client(struct net_if *iface, void *user_data)
 {
 	ARG_UNUSED(user_data);
 
-	LOG_INF("Stop on %s: index=%d", net_if_get_device(iface)->name,
+	LOG_INF("Stop on %s[%d]", net_if_get_device(iface)->name,
 		net_if_get_by_iface(iface));
 	net_dhcpv4_stop(iface);
 }
@@ -75,20 +75,19 @@ static void handler(struct net_mgmt_event_callback *cb,
 			continue;
 		}
 
-		LOG_INF("   Address[%d]: %s", net_if_get_by_iface(iface),
-			net_addr_ntop(AF_INET,
-			    &iface->config.ip.ipv4->unicast[i].ipv4.address.in_addr,
-						  buf, sizeof(buf)));
-		LOG_INF("    Subnet[%d]: %s", net_if_get_by_iface(iface),
-			net_addr_ntop(AF_INET,
-				       &iface->config.ip.ipv4->unicast[i].netmask,
-				       buf, sizeof(buf)));
-		LOG_INF("    Router[%d]: %s", net_if_get_by_iface(iface),
-			net_addr_ntop(AF_INET,
-						 &iface->config.ip.ipv4->gw,
-						 buf, sizeof(buf)));
-		LOG_INF("Lease time[%d]: %u seconds", net_if_get_by_iface(iface),
-			iface->config.dhcpv4.lease_time);
+		LOG_INF("New lease on %s[%d]", net_if_get_device(iface)->name,
+						net_if_get_by_iface(iface));
+		LOG_INF("    Address: %s", net_addr_ntop(AF_INET,
+				&iface->config.ip.ipv4->unicast[i].ipv4.address.in_addr,
+					buf, sizeof(buf)));
+		LOG_DBG("    Subnet: %s", net_addr_ntop(AF_INET,
+					&iface->config.ip.ipv4->unicast[i].netmask,
+					buf, sizeof(buf)));
+		LOG_DBG("    Router: %s", net_addr_ntop(AF_INET,
+					&iface->config.ip.ipv4->gw,
+					buf, sizeof(buf)));
+		LOG_DBG("    Lease time: %u seconds",
+					iface->config.dhcpv4.lease_time);
 	}
 }
 
@@ -99,14 +98,12 @@ static void option_handler(struct net_dhcpv4_option_callback *cb,
 {
 	char buf[NET_IPV4_ADDR_LEN];
 
-	LOG_INF("DHCP Option %d: %s", cb->option,
+	LOG_DBG("DHCP Option %d: %s", cb->option,
 		net_addr_ntop(AF_INET, cb->data, buf, sizeof(buf)));
 }
 
 int dhcp4_init(void)
 {
-	LOG_INF("Run dhcpv4 client");
-
 	net_mgmt_init_event_callback(&mgmt_cb, handler,
 				     NET_EVENT_IPV4_ADDR_ADD);
 	net_mgmt_add_event_callback(&mgmt_cb);
