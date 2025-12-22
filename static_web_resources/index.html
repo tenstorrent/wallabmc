@@ -209,6 +209,7 @@
 
 			// Create the Basic Auth header string once and store it
 			basicAuthHeader = 'Basic ' + btoa(user + ":" + pass);
+			wsAuthHeader = 'Basic_' + user + "_" + pass;
 			hide('login-error');
 
 			try {
@@ -235,6 +236,7 @@
 				show('login-error');
 				setText('login-error', err.message);
 				basicAuthHeader = null; // Reset on failure
+				wsAuthHeader = null; // Reset on failure
 			}
 		}
 
@@ -245,6 +247,7 @@
 			closeTerminal() /* Term might be open */
 
 			basicAuthHeader = null;
+			wsAuthHeader = null;
 			systemIdPath = null;
 
 			document.getElementById('password').value = '';
@@ -334,7 +337,7 @@
 				const wsUrl = `${socketProtocol}//${window.location.host}/console`;
 
 				console.log("Connecting to console: " + wsUrl);
-				ws = new WebSocket(wsUrl);
+				ws = new WebSocket(wsUrl, [wsAuthHeader]);
 				ws.addEventListener('open', () => {
 					// \x1b[1;32m is Green Bold, \x1b[0m is Reset
 					term.write('\x1b[1;32mConnected.\x1b[0m\r\n');
@@ -350,6 +353,9 @@
 						}
 					} else {
 						term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\r\n`);
+					}
+					if (event.code === 1005) {
+						term.write('\x1b[33mPossible authentication error.\x1b[0m\r\n');
 					}
 					fitAddon.fit();
 					ws_open = false;
