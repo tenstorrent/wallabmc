@@ -79,7 +79,7 @@ def run_qemu_ci():
         # Wait for console prompt and DHCP lease
         while not seen_dhcp:
             line = getline(qemu_proc, "BMC", start_time, timeout_sec)
-            if "Lease time" in line:
+            if "Address: " in line:
                 seen_dhcp = True
             if "uart:~$" in line:
                 seen_prompt = True
