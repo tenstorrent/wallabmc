@@ -18,9 +18,9 @@ LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
 #include "config.h"
 #include "button.h"
 #include "net.h"
+#include "http.h"
 #include "power.h"
 #include "jtag.h"
-#include "redfish.h"
 
 static bool boot_finished = false;
 
@@ -187,13 +187,13 @@ int main(void)
 		return -1;
 	}
 
-	if (redfish_init() < 0) {
-		LOG_ERR("Redfish init failed");
+	if (jtag_init() < 0) {
+		LOG_ERR("JTAG init failed");
 		return -1;
 	}
 
-	if (jtag_init() < 0) {
-		LOG_ERR("JTAG init failed");
+	if (app_http_server_init() < 0) {
+		LOG_ERR("HTTP server init failed");
 		return -1;
 	}
 

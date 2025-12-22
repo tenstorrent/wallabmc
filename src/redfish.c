@@ -15,9 +15,11 @@
 #include <zephyr/data/json.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/base64.h>
 #include <stdio.h>
-#include "redfish.h"
-#include "certificate.h"
+#include <string.h>
+
+#include "config.h"
 #include "power.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
@@ -104,6 +106,18 @@ struct redfish_actions {
 	struct redfish_reset_action reset_action;
 };
 
+/* System Info: ProcessorSummary nested object */
+struct redfish_processor_summary {
+	int32_t count;
+	const char *description;
+};
+
+/* System Info: MemorySummary nested object */
+struct redfish_memory_summary {
+	int32_t total_system_GiB;
+};
+
+
 /* System Info response */
 struct redfish_computer_system {
 	const char *odata_id;
@@ -111,9 +125,13 @@ struct redfish_computer_system {
 	const char *id;
 	const char *uuid;
 	const char *name;
-	const char *description;
+	const char *manufacturer;
+	const char *model;
+	const char *host_name;
 	const char *power_state;
 	const char *serial_number;
+	struct redfish_processor_summary processor_summary;
+	struct redfish_memory_summary memory_summary;
 	struct redfish_actions actions;
 };
 
@@ -187,6 +205,20 @@ static const struct json_obj_descr actions_descr[] = {
 				    reset_action, reset_action_descr),
 };
 
+/* System Info: ProcessorSummary nested object descriptor */
+static const struct json_obj_descr processor_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
+				  count, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Description",
+				  description, JSON_TOK_STRING),
+};
+
+/* System Info: MemorySummary nested object descriptor */
+static const struct json_obj_descr memory_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_memory_summary, "TotalSystemMemoryGiB",
+				  total_system_GiB, JSON_TOK_NUMBER),
+};
+
 /* System Info descriptor */
 static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
@@ -199,30 +231,96 @@ static const struct json_obj_descr computer_system_descr[] = {
 				  uuid, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
 				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Description",
-				  description, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Manufacturer",
+				  manufacturer, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
+				  model, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
 				  power_state, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
 				  serial_number, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "ProcessorSummary",
+				    processor_summary, processor_summary_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "MemorySummary",
+				    memory_summary, memory_summary_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
 };
 
-static uint16_t redfish_http_port = 80;
+/* "Basic" (not session based) authentication, uses HTTP Authorization header */
+HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "Authorization");
 
-HTTP_SERVICE_DEFINE(redfish_http_service, NULL, &redfish_http_port, 2, 5,
-		    NULL, NULL, NULL);
+#define CREDENTIALS_MAX_LEN 64
+static int validate_auth(struct http_client_ctx *client)
+{
+	size_t header_count = client->header_capture_ctx.count;
+	const struct http_header *headers = client->header_capture_ctx.headers;
+	const char *auth_header = NULL;
+	const char *prefix = "Basic ";
 
-static const sec_tag_t sec_tag_list_verify_none[] = {
-	HTTP_SERVER_CERTIFICATE_TAG,
-};
+	for (unsigned int i = 0; i < header_count; i++) {
+		if (!strcmp(headers[i].name, "Authorization")) {
+			auth_header = headers[i].value;
+			break;
+		}
+	}
 
-static uint16_t redfish_https_port = 443;
+	if (auth_header == NULL) {
+		LOG_WRN("No auth header");
+		return -1;
+	}
 
-HTTPS_SERVICE_DEFINE(redfish_https_service, NULL, &redfish_https_port,
-		     2, 5, NULL, NULL, NULL, sec_tag_list_verify_none,
-		     sizeof(sec_tag_list_verify_none));
+	if (strncmp(auth_header, prefix, strlen(prefix)) != 0) {
+		LOG_WRN("Not basic auth");
+		return -1; // Not Basic auth
+	}
+
+	// Extract the Base64 token part
+	const char *b64_token = auth_header + strlen(prefix);
+	size_t token_len = strlen(b64_token);
+
+	static uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
+	size_t decoded_len = 0;
+
+	int ret = base64_decode(decoded_buf, sizeof(decoded_buf) - 1, &decoded_len,
+				b64_token, token_len);
+	if (ret < 0) {
+		LOG_WRN("BASE64 decode failed");
+		return ret;
+	}
+
+	// Null-terminate the decoded string for safety
+	decoded_buf[decoded_len] = '\0';
+
+	// Build the expected string "user:pass"
+	static uint8_t expected[CREDENTIALS_MAX_LEN];
+	snprintf(expected, sizeof(expected), "%s:%s", "admin", config_bmc_admin_password());
+
+	if (strcmp((char *)decoded_buf, expected) == 0)
+		return 0; // Success!
+
+	LOG_WRN("Authentication did not match");
+
+	return -1;
+}
+
+/*
+ * XXX: Zephyr could provide a send_http1_401 response to send a
+ * canonical 401 header, but this still seems to work.
+ */
+static void set_unauth_response(struct http_response_ctx *ctx)
+{
+	static struct http_header extra_headers[] = {
+		{ .name = "WWW-Authenticate", .value = "Basic realm=\"BMC\"" },
+	};
+
+	ctx->status = HTTP_401_UNAUTHORIZED;
+	ctx->final_chunk = true;
+	ctx->headers = extra_headers;
+	ctx->header_count = ARRAY_SIZE(extra_headers);
+	ctx->body = NULL;
+	ctx->body_len = 0;
+}
 
 /* Redfish Version: GET /redfish */
 static int redfish_version_handler(struct http_client_ctx *client,
@@ -236,6 +334,8 @@ static int redfish_version_handler(struct http_client_ctx *client,
 		.v1 = "/redfish/v1/"
 	};
 
+	/* Must not require auth */
+
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
 
@@ -248,6 +348,7 @@ static int redfish_version_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode redfish version: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -281,6 +382,8 @@ static int service_root_handler(struct http_client_ctx *client,
 		}
 	};
 
+	/* Must not require auth */
+
 	if (status == HTTP_SERVER_DATA_ABORTED)
 		return 0;
 
@@ -293,6 +396,7 @@ static int service_root_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode service root: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -327,7 +431,14 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		.members_len = 1
 	};
 
-	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_DATA_ABORTED)
+		return 0;
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
@@ -338,6 +449,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode systems collection: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -360,7 +472,14 @@ static int system_info_handler(struct http_client_ctx *client,
 {
 	static char buffer[1024]; // Static to persist for response duration
 
-	if (status == HTTP_SERVER_DATA_ABORTED) return 0;
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_DATA_ABORTED)
+		return 0;
 
 	if (status != HTTP_SERVER_DATA_FINAL)
 		return 0;
@@ -370,10 +489,18 @@ static int system_info_handler(struct http_client_ctx *client,
 		.odata_type = "#ComputerSystem.v1_22_0.ComputerSystem",
 		.id = "system",
 		.uuid = "38947555-7742-3448-3784-823347823834",
-		.name = "Atlantis",
-		.description = "Atlantis",
-		.power_state = get_power_state() ? "On" : "Off",
+		.name = "Dev Board 7",
+		.manufacturer = "Tenstorrent",
+		.model = "Atlantis",
+		.processor_summary = {
+			.count = 8,
+			.description = "Tenstorrent Ascalon X™",
+		},
+		.memory_summary = {
+			.total_system_GiB = 32,
+		},
 		.serial_number = serial_number,
+		.power_state = get_power_state() ? "On" : "Off",
 		.actions = {
 			.reset_action = {
 				.target = "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
@@ -393,6 +520,7 @@ static int system_info_handler(struct http_client_ctx *client,
 	if (ret < 0) {
 		LOG_ERR("Failed to encode computer system: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -416,6 +544,12 @@ static int system_reset_handler(struct http_client_ctx *client,
 				struct http_response_ctx *response_ctx,
 				void *user_data)
 {
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
 	if (status == HTTP_SERVER_DATA_ABORTED) {
 		payload_len = 0;
 		return 0;
@@ -423,6 +557,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 	if (client->method != HTTP_POST) {
 		response_ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
+		response_ctx->final_chunk = true;
 		return 0;
 	}
 
@@ -434,6 +569,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 		} else {
 			LOG_ERR("Payload too large");
 			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
 			return 0;
 		}
 	}
@@ -447,6 +583,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 		if (ret < 0) {
 			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
 		} else {
 			LOG_INF("Reset Action: %s", payload.reset_type);
 
@@ -480,11 +617,6 @@ static struct http_resource_detail_dynamic version_detail = {
 	.cb = redfish_version_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_version, redfish_http_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_https, redfish_https_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash, redfish_http_service, "/redfish", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, redfish_https_service, "/redfish", &version_detail);
-
 // Root
 static struct http_resource_detail_dynamic root_detail = {
 	.common = {
@@ -494,14 +626,6 @@ static struct http_resource_detail_dynamic root_detail = {
 	.cb = service_root_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_root, redfish_http_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_https, redfish_https_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash, redfish_http_service, "/redfish/v1",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, redfish_https_service, "/redfish/v1",
-		&root_detail);
 
 // Systems Collection Registration
 static struct http_resource_detail_dynamic systems_coll_detail = {
@@ -512,10 +636,6 @@ static struct http_resource_detail_dynamic systems_coll_detail = {
 	.cb = systems_collection_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_systems_coll, redfish_http_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
-HTTP_RESOURCE_DEFINE(redfish_systems_coll_https, redfish_https_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
 
 // System
 static struct http_resource_detail_dynamic sys_detail = {
@@ -526,10 +646,6 @@ static struct http_resource_detail_dynamic sys_detail = {
 	.cb = system_info_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_sys, redfish_http_service,
-		"/redfish/v1/Systems/system", &sys_detail);
-HTTP_RESOURCE_DEFINE(redfish_sys_https, redfish_https_service,
-		"/redfish/v1/Systems/system", &sys_detail);
 
 // Action
 static struct http_resource_detail_dynamic action_detail = {
@@ -540,39 +656,33 @@ static struct http_resource_detail_dynamic action_detail = {
 	.cb = system_reset_handler,
 	.user_data = NULL,
 };
-HTTP_RESOURCE_DEFINE(redfish_action, redfish_http_service,
+
+HTTP_RESOURCE_DEFINE(redfish_version, http_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash, http_service, "/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root, http_service, "/redfish/v1/",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash, http_service, "/redfish/v1",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_coll, http_service,
+		"/redfish/v1/Systems", &systems_coll_detail);
+HTTP_RESOURCE_DEFINE(redfish_sys, http_service,
+		"/redfish/v1/Systems/system", &sys_detail);
+HTTP_RESOURCE_DEFINE(redfish_action, http_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
-HTTP_RESOURCE_DEFINE(redfish_action_https, redfish_https_service,
+
+#if defined(CONFIG_APP_HTTPS)
+HTTP_RESOURCE_DEFINE(redfish_version_https, https_service, "/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, https_service, "/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_https, https_service, "/redfish/v1/",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, https_service, "/redfish/v1",
+		&root_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_coll_https, https_service,
+		"/redfish/v1/Systems", &systems_coll_detail);
+HTTP_RESOURCE_DEFINE(redfish_sys_https, https_service,
+		"/redfish/v1/Systems/system", &sys_detail);
+HTTP_RESOURCE_DEFINE(redfish_action_https, https_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
-
-static void setup_tls(void)
-{
-	int err;
-
-	err = tls_credential_add(HTTP_SERVER_CERTIFICATE_TAG,
-			TLS_CREDENTIAL_PUBLIC_CERTIFICATE,
-			server_certificate,
-			sizeof(server_certificate));
-	if (err < 0) {
-		LOG_ERR("Failed to register public certificate: %d", err);
-	}
-
-	err = tls_credential_add(HTTP_SERVER_CERTIFICATE_TAG,
-			TLS_CREDENTIAL_PRIVATE_KEY,
-			private_key, sizeof(private_key));
-	if (err < 0) {
-		LOG_ERR("Failed to register private key: %d", err);
-	}
-}
-
-int redfish_init(void)
-{
-	LOG_INF("Starting Redfish HTTP server");
-
-	setup_tls();
-	http_server_start();
-
-	return 0;
-}
+#endif /* defined(CONFIG_APP_HTTPS) */

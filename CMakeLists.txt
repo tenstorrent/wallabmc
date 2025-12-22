@@ -24,7 +24,21 @@ if(NOT DEFINED PROJECT_GIT_SHA)
 	endif()
 endif()
 
+# Define project git SHA1 as compile-time string constant
+target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
+
 zephyr_linker_sources(SECTIONS sections-rom.ld)
+zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
+  NAME http_resource_desc_web_https_service
+  KVMA RAM_REGION GROUP RODATA_REGION
+)
+zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
+  NAME http_resource_desc_web_http_service
+  KVMA RAM_REGION GROUP RODATA_REGION
+)
+
+# Used for webserver resources
+set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 
 target_sources(app PRIVATE
 	src/config.c
@@ -32,6 +46,14 @@ target_sources(app PRIVATE
 	src/main.c
 	src/net.c
 	src/power.c
+)
+
+target_sources_ifdef(CONFIG_HTTP_SERVER app PRIVATE
+	src/http.c
+)
+
+target_sources_ifdef(CONFIG_APP_WEB app PRIVATE
+	src/web.c
 )
 
 target_sources_ifdef(CONFIG_JTAG app PRIVATE
@@ -47,12 +69,20 @@ target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
 
-# Define project git SHA1 as compile-time string constant
-target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
+if(CONFIG_APP_WEB)
+  foreach(web_resource
+    index.html
+    logo.jpeg
+  )
+    generate_inc_file_for_target(app
+      static_web_resources/${web_resource}
+      ${gen_dir}/${web_resource}.gz.inc
+      --gzip
+    )
+  endforeach()
+endif()
 
-if(CONFIG_REDFISH_CRYPTO)
-  set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
-
+if(CONFIG_APP_CRYPTO)
   foreach(inc_file
     server_cert.der
     server_privkey.der
