@@ -29,6 +29,9 @@ target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 
+# Used for webserver resources
+set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
 target_sources(app PRIVATE
 	src/config.c
 	src/dhcp.c
@@ -51,8 +54,6 @@ target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 )
 
 if(CONFIG_REDFISH_CRYPTO)
-  set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
-
   foreach(inc_file
     server_cert.der
     server_privkey.der
