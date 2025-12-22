@@ -24,6 +24,9 @@ if(NOT DEFINED PROJECT_GIT_SHA)
 	endif()
 endif()
 
+# Define project git SHA1 as compile-time string constant
+target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
+
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 
 target_sources(app PRIVATE
@@ -46,9 +49,6 @@ target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
-
-# Define project git SHA1 as compile-time string constant
-target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
 if(CONFIG_REDFISH_CRYPTO)
   set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
