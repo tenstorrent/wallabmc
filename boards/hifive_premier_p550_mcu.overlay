@@ -1,5 +1,13 @@
 // hifive premier p550 mcu
 / {
+    chosen {
+        zephyr,entropy = &rng;
+        zephyr,flash-controller = &flash;
+        zephyr,sram = &sram0;
+        zephyr,flash = &flash0;
+        zephyr,code-partition = &slot0_partition;
+    };
+
     jtag {
         // What is a better setting for this?
         compatible = "gpio-leds";
