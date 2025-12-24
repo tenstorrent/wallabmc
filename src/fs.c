@@ -13,6 +13,13 @@ LOG_MODULE_REGISTER(stm32_bmc_fs, LOG_LEVEL_INF);
 #define STORAGE_PARTITION_LABEL storage_partition
 #define STORAGE_PARTITION_ID FIXED_PARTITION_ID(STORAGE_PARTITION_LABEL)
 
+static bool fs_is_enabled;
+
+bool fs_enabled(void)
+{
+	return fs_is_enabled;
+}
+
 #if FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL)
 FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(lfs_data);
 
@@ -52,12 +59,19 @@ static int mount_fs(void)
 
 	LOG_INF("Filesystem mounted at %s", lfs_mnt.mnt_point);
 
+	fs_is_enabled = true;
+
 	return 0;
 }
 
 static int umount_fs(void)
 {
 	int rc;
+
+	if (!fs_is_enabled)
+		return 0;
+
+	fs_is_enabled = false;
 
 	rc = fs_unmount(&lfs_mnt);
 	if (rc) {
