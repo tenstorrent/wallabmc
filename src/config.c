@@ -104,13 +104,8 @@ static int read_config(void)
 	fs_file_t_init(&config_file);
 
 	if (!config_exists()) {
-		rc = fs_open(&config_file, CONFIG_FILE, FS_O_CREATE);
-		if (rc) {
-			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
 		memset(&config_data, 0, sizeof(config_data));
-		goto out_close;
+		return copied;
 	}
 
 	rc = fs_open(&config_file, CONFIG_FILE, FS_O_READ);
@@ -134,7 +129,6 @@ static int read_config(void)
 		copied += rc;
 	}
 
-out_close:
 	rc = fs_close(&config_file);
 	if (rc) {
 		LOG_ERR("Could not close file %s (err=%d)", CONFIG_FILE, rc);
@@ -153,10 +147,18 @@ static int write_config(void)
 
 	fs_file_t_init(&config_file);
 
-	rc = fs_open(&config_file, CONFIG_FILE, FS_O_WRITE);
-	if (rc) {
-		LOG_ERR("Could not open file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
+	if (!config_exists()) {
+		rc = fs_open(&config_file, CONFIG_FILE, FS_O_CREATE);
+		if (rc) {
+			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
+			return rc;
+		}
+	} else {
+		rc = fs_open(&config_file, CONFIG_FILE, FS_O_WRITE);
+		if (rc) {
+			LOG_ERR("Could not open file %s (err=%d)", CONFIG_FILE, rc);
+			return rc;
+		}
 	}
 
 	while (remain) {
