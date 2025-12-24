@@ -20,9 +20,16 @@ LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
-#define MAX_HOSTNAME_LEN 31
+#define MAX_HOSTNAME_LEN 15
 
-#define MAX_PW_LEN 31
+#define MAX_PW_LEN 15
+
+/*
+ * Incrementing this allows struct config_data to be modified
+ * arbitrarily, but there is no longer compatibility between
+ * versions and the config will be destroyed.
+ */
+#define FS_CONFIG_VERSION 2
 
 /*
  * Add fields to the end, do not remove or change meaning.
@@ -39,6 +46,15 @@ struct config_data {
 	uint8_t host_auto_poweron;
 	char bmc_admin_password[MAX_PW_LEN + 1]; /* NULL terminated */
 } __packed;
+
+/*
+ * littlefs can keep up to 64 bytes of data in the file/
+ * inode rather than require a new data sector for it.
+ * P550 only has 2 sectors which is not enough for a
+ * data sector, so keep this within 64 bytes until we
+ * work out how to rearrange the flash more optimally.
+ */
+BUILD_ASSERT(sizeof(struct config_data) <= 64);
 
 static struct config_data config_data;
 
@@ -484,12 +500,14 @@ int config_init(void)
 	(ondisk_size >= offsetof(struct config_data, field) + sizeof(config_data.field))
 
 	if (IS_ONDISK(version)) {
-		if (config_data.version != 1) {
-			LOG_ERR("Config version unknown (version=%d)", config_data.version);
-			return -EINVAL;
+		if (config_data.version != FS_CONFIG_VERSION) {
+			LOG_WRN("Config version unknown (version=%d), creating new config", config_data.version);
+			memset(&config_data, 0, sizeof(config_data));
+			ondisk_size = 0;
+			config_data.version = FS_CONFIG_VERSION;
 		}
 	} else {
-		config_data.version = 1;
+		config_data.version = FS_CONFIG_VERSION;
 	}
 
 	if (IS_ONDISK(bmc_hostname)) {
