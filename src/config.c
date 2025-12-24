@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
 #include "main.h"
 #include "net.h"
 #include "dhcp.h"
+#include "fs.h"
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
@@ -69,7 +70,7 @@ static bool config_exists(void)
 	struct fs_dirent *entry; /* don't put this on stack */
 	int rc;
 
-	if (!IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
+	if (!fs_enabled())
 		return false;
 
 	entry = malloc(sizeof(*entry));
@@ -385,7 +386,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
 	if (config_dirty) {
-		if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
+		if (fs_enabled())
 			shell_print(sh, "Configuration changes have not been saved");
 		else
 			shell_print(sh, "Configuration changes have been made");
@@ -401,6 +402,11 @@ static int cmd_config_save(const struct shell *sh, size_t argc, char **argv)
 
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
+
+	if (!fs_enabled()) {
+		shell_info(sh, "Storage not available, skipping save");
+		return 0;
+	}
 
 	if (!config_dirty) {
 		shell_info(sh, "Configuration is unchanged, skipping save");
@@ -454,7 +460,7 @@ int config_init(void)
 	int ondisk_size;
 	int rc;
 
-	if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE)) {
+	if (fs_enabled()) {
 		rc = read_config();
 		if (rc < 0) {
 			LOG_ERR("Error loading config");
@@ -526,12 +532,11 @@ int config_init(void)
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
-	if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE) &&
-			ondisk_size != sizeof(config_data)) {
+	if (fs_enabled() && ondisk_size != sizeof(config_data)) {
 		rc = write_config();
 		if (rc < 0) {
-			LOG_ERR("Could not update config file");
-			return rc;
+			LOG_ERR("Could not update config file, continuing without persistent storage");
+			return fs_exit();
 		}
 	}
 
