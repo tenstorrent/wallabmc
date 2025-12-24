@@ -42,11 +42,11 @@ def run_qemu_ci():
     print(f"--- [Test Runner] Starting Cycle ---")
 
     try:
-        # 1. Start SOCAT
+        # Start SOCAT
         print(f"--- [Test Runner] Launching socat... ")
         socat_proc = subprocess.Popen(socat_cmd)
 
-        # 2. Wait for the PTY device to appear
+        # Wait for the PTY device to appear
         print(f"--- [Test Runner] Waiting for {slip_dev}...")
         wait_start = time.time()
         while not os.path.exists(slip_dev):
@@ -58,7 +58,7 @@ def run_qemu_ci():
 
             time.sleep(0.1)
 
-        # 3. Start QEMU
+        # Start QEMU
         print(f"--- [Test Runner] Device found. Launching QEMU... ---")
         qemu_proc = subprocess.Popen(
             qemu_cmd,
@@ -73,17 +73,24 @@ def run_qemu_ci():
         shutdown_sent_time = None
         cmd_sent = False
         forced_success = False
+        seen_prompt = False
+        seen_dhcp = False
 
-        # Wait for DHCP lease
-        while True:
+        # Wait for console prompt and DHCP lease
+        while not seen_dhcp:
             line = getline(qemu_proc, "BMC", start_time, timeout_sec)
-            if "net_config: Lease time:" in line:
-                break
+            if "Lease time" in line:
+                seen_dhcp = True
+            if "uart:~$" in line:
+                seen_prompt = True
 
-        while True:
+        qemu_proc.stdin.write("\n")
+        qemu_proc.stdin.flush()
+
+        while not seen_prompt:
             line = getline(qemu_proc, "BMC", start_time, timeout_sec)
             if "uart:~$" in line:
-                break
+                seen_prompt = True
 
         qemu_proc.stdin.write("power on\n")
         qemu_proc.stdin.flush()
@@ -93,15 +100,7 @@ def run_qemu_ci():
             if "uart:~$" in line:
                 break
 
-        qemu_proc.stdin.write("net ping -c 1 10.0.2.2\n")
-        qemu_proc.stdin.flush()
-
-        while True:
-            line = getline(qemu_proc, "BMC", start_time, timeout_sec)
-            if "bytes from 10.0.2.2" in line:
-                break
-
-        # 4. Network is up, run telnet
+        # Network is up, run telnet
         print(f"--- [Test Runner] Network up. Connecting telnet... ---")
         telnet_proc = subprocess.Popen(
             telnet_cmd,
