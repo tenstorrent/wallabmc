@@ -16,12 +16,20 @@ LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
 #include "main.h"
 #include "net.h"
 #include "dhcp.h"
+#include "fs.h"
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
-#define MAX_HOSTNAME_LEN 31
+#define MAX_HOSTNAME_LEN 15
 
-#define MAX_PW_LEN 31
+#define MAX_PW_LEN 15
+
+/*
+ * Incrementing this allows struct config_data to be modified
+ * arbitrarily, but there is no longer compatibility between
+ * versions and the config will be destroyed.
+ */
+#define FS_CONFIG_VERSION 2
 
 /*
  * Add fields to the end, do not remove or change meaning.
@@ -38,6 +46,15 @@ struct config_data {
 	uint8_t host_auto_poweron;
 	char bmc_admin_password[MAX_PW_LEN + 1]; /* NULL terminated */
 } __packed;
+
+/*
+ * littlefs can keep up to 64 bytes of data in the file/
+ * inode rather than require a new data sector for it.
+ * P550 only has 2 sectors which is not enough for a
+ * data sector, so keep this within 64 bytes until we
+ * work out how to rearrange the flash more optimally.
+ */
+BUILD_ASSERT(sizeof(struct config_data) <= 64);
 
 static struct config_data config_data;
 
@@ -69,7 +86,7 @@ static bool config_exists(void)
 	struct fs_dirent *entry; /* don't put this on stack */
 	int rc;
 
-	if (!IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
+	if (!fs_enabled())
 		return false;
 
 	entry = malloc(sizeof(*entry));
@@ -103,13 +120,8 @@ static int read_config(void)
 	fs_file_t_init(&config_file);
 
 	if (!config_exists()) {
-		rc = fs_open(&config_file, CONFIG_FILE, FS_O_CREATE);
-		if (rc) {
-			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
 		memset(&config_data, 0, sizeof(config_data));
-		goto out_close;
+		return copied;
 	}
 
 	rc = fs_open(&config_file, CONFIG_FILE, FS_O_READ);
@@ -133,7 +145,6 @@ static int read_config(void)
 		copied += rc;
 	}
 
-out_close:
 	rc = fs_close(&config_file);
 	if (rc) {
 		LOG_ERR("Could not close file %s (err=%d)", CONFIG_FILE, rc);
@@ -152,10 +163,18 @@ static int write_config(void)
 
 	fs_file_t_init(&config_file);
 
-	rc = fs_open(&config_file, CONFIG_FILE, FS_O_WRITE);
-	if (rc) {
-		LOG_ERR("Could not open file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
+	if (!config_exists()) {
+		rc = fs_open(&config_file, CONFIG_FILE, FS_O_CREATE);
+		if (rc) {
+			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
+			return rc;
+		}
+	} else {
+		rc = fs_open(&config_file, CONFIG_FILE, FS_O_WRITE);
+		if (rc) {
+			LOG_ERR("Could not open file %s (err=%d)", CONFIG_FILE, rc);
+			return rc;
+		}
 	}
 
 	while (remain) {
@@ -385,7 +404,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
 	if (config_dirty) {
-		if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE))
+		if (fs_enabled())
 			shell_print(sh, "Configuration changes have not been saved");
 		else
 			shell_print(sh, "Configuration changes have been made");
@@ -401,6 +420,11 @@ static int cmd_config_save(const struct shell *sh, size_t argc, char **argv)
 
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
+
+	if (!fs_enabled()) {
+		shell_info(sh, "Storage not available, skipping save");
+		return 0;
+	}
 
 	if (!config_dirty) {
 		shell_info(sh, "Configuration is unchanged, skipping save");
@@ -454,7 +478,7 @@ int config_init(void)
 	int ondisk_size;
 	int rc;
 
-	if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE)) {
+	if (fs_enabled()) {
 		rc = read_config();
 		if (rc < 0) {
 			LOG_ERR("Error loading config");
@@ -476,12 +500,14 @@ int config_init(void)
 	(ondisk_size >= offsetof(struct config_data, field) + sizeof(config_data.field))
 
 	if (IS_ONDISK(version)) {
-		if (config_data.version != 1) {
-			LOG_ERR("Config version unknown (version=%d)", config_data.version);
-			return -EINVAL;
+		if (config_data.version != FS_CONFIG_VERSION) {
+			LOG_WRN("Config version unknown (version=%d), creating new config", config_data.version);
+			memset(&config_data, 0, sizeof(config_data));
+			ondisk_size = 0;
+			config_data.version = FS_CONFIG_VERSION;
 		}
 	} else {
-		config_data.version = 1;
+		config_data.version = FS_CONFIG_VERSION;
 	}
 
 	if (IS_ONDISK(bmc_hostname)) {
@@ -526,12 +552,11 @@ int config_init(void)
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
-	if (IS_ENABLED(CONFIG_PERSISTENT_STORAGE) &&
-			ondisk_size != sizeof(config_data)) {
+	if (fs_enabled() && ondisk_size != sizeof(config_data)) {
 		rc = write_config();
 		if (rc < 0) {
-			LOG_ERR("Could not update config file");
-			return rc;
+			LOG_ERR("Could not update config file, continuing without persistent storage");
+			return fs_exit();
 		}
 	}
 

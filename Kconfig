@@ -107,6 +107,7 @@ config APP_WEB_TERMINAL
 	default y
 	select APP_WEB
 	select HTTP_SERVER_WEBSOCKET
+	select SHELL
 	select SHELL_BACKEND_WEBSOCKET
 	select LOG_BACKEND_WS
 	select LOG_BACKEND_WS_AUTOSTART
@@ -182,7 +183,7 @@ config PERSISTENT_STORAGE
 	# Enable Flash and Flash Map to access memory
 	select FLASH
 	select FLASH_MAP
-	select FLASH_SHELL if SHELL
+	# select FLASH_SHELL if SHELL # ~4kB flash
 	# Writing internal flash that is used for XIP requires
 	# that the flash driver is relocated into RAM.
 	select CODE_DATA_RELOCATION_SRAM
