@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(stm32_bmc_dhcp, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wallabmc_dhcp, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
 #include <zephyr/linker/sections.h>

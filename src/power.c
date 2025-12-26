@@ -11,7 +11,7 @@
 
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(power_shell);
+LOG_MODULE_REGISTER(wallabmc_power);
 
 #include "config.h"
 
