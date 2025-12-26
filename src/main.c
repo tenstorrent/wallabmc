@@ -4,7 +4,7 @@
 
 #include <zephyr/logging/log.h>
 #include <zephyr/logging/log_ctrl.h>
-LOG_MODULE_REGISTER(stm32_bmc, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/rtc.h>
