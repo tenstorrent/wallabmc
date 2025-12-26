@@ -1,5 +1,9 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+#ifndef __BUTTON_H__
+#define __BUTTON_H__
 #ifdef CONFIG_PERSISTENT_STORAGE
 int button_init(void);
 #else
 static inline int button_init(void) { return 0; }
+#endif
 #endif
