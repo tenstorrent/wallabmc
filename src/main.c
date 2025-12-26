@@ -153,8 +153,7 @@ int main(void)
 	}
 
 	if (fs_init() < 0) {
-		LOG_ERR("Filesystem init failed");
-		return -1;
+		LOG_ERR("Filesystem init failed, continuing without persistent storage");
 	}
 
 	if (config_init() < 0) {
