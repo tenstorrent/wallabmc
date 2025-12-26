@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-mainmenu "Atlantis BMC application"
+mainmenu "WallaBMC"
 
 config MAIN_STACK_SIZE
 	int
