@@ -52,6 +52,10 @@ target_sources_ifdef(CONFIG_RTC app PRIVATE
 	src/rtc.c
 )
 
+target_sources_ifdef(CONFIG_APP_NTP app PRIVATE
+	src/ntp.c
+)
+
 target_sources_ifdef(CONFIG_HTTP_SERVER app PRIVATE
 	src/http.c
 )

@@ -2,6 +2,10 @@
 
 // Nucleo F767ZI
 / {
+    chosen {
+        zephyr,rtc = &rtc;
+    };
+
     jtag {
         // What is a better setting for this?
         compatible = "gpio-leds";

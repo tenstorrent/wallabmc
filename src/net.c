@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(wallabmc_net, LOG_LEVEL_INF);
 #include "net.h"
 #include "dhcp.h"
 #include "config.h"
+#include "ntp.h"
 
 int net_do_set_hostname(const char *hostname)
 {
@@ -122,6 +123,11 @@ int net_init(void)
 	}
 
 	LOG_INF("Network hostname: %s", net_hostname_get());
+
+	LOG_DBG("NTP init");
+	rc = ntp_init();
+	if (rc)
+		LOG_ERR("NTP init failed");
 
 	return 0;
 }
