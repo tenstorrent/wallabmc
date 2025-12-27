@@ -48,6 +48,10 @@ target_sources(app PRIVATE
 	src/power.c
 )
 
+target_sources_ifdef(CONFIG_RTC app PRIVATE
+	src/rtc.c
+)
+
 target_sources_ifdef(CONFIG_HTTP_SERVER app PRIVATE
 	src/http.c
 )
