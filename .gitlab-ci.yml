@@ -70,6 +70,6 @@ test:
         matrix:
           - BOARD: qemu_cortex_m3
   before_script:
-    - sudo apt-get -qq update && sudo apt-get install -qq telnet socat qemu-system-arm
+    - sudo apt-get -qq update && sudo apt-get install -qq telnet qemu-system-arm
   script:
     - python3 $CI_PROJECT_DIR/scripts/run_qemu_ci.py zephyr.elf

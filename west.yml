@@ -1,0 +1,13 @@
+manifest:
+  remotes:
+    - name: zephyr
+      url-base: https://github.com/zephyrproject-rtos
+
+  projects:
+    - name: zephyr
+      remote: zephyr
+      revision: main
+      import: true
+
+  self:
+    path: atlantis-bmc

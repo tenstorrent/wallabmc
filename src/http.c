@@ -17,7 +17,7 @@
 #include <stdio.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(http_server, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(wallabmc_http, LOG_LEVEL_INF);
 
 #include "http.h"
 
