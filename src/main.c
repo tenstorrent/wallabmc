@@ -116,6 +116,75 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmc_cmds,
 
 SHELL_CMD_REGISTER(bmc, &sub_bmc_cmds, "BMC system commands", NULL);
 
+static int cmd_hop(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	/* Wallaby on ground */
+	const char *wallaby_ground[] = {
+		"",
+		"",
+		"",
+		"             /)",
+		"          <.' \\_",
+		"            / ( )\\",
+		"            __|/  \\__",
+		NULL
+	};
+
+	/* Wallaby in air (hopped up) */
+	const char *wallaby_air[] = {
+		"             /)",
+		"          <.' \\_",
+		"            / ( )\\",
+		"            |/  \\",
+		"            /     \\",
+		"",
+		"",
+		NULL
+	};
+
+	int pos;  /* Horizontal position */
+	int i, j;
+	int max_pos = 60;  /* Maximum horizontal position */
+	int num_hops = 4;  /* Number of complete hops */
+	bool in_air = false;
+
+	shell_print(sh, "\n");
+
+	for (i = 0; i < num_hops; i++) {
+		/* Each hop moves the wallaby forward */
+		for (pos = max_pos; pos > 0; pos -= 4) {
+			/* Clear screen and move cursor to home position */
+			shell_print(sh, "\033[2J\033[H");
+
+			/* Alternate between air and ground every few steps */
+			if ((pos / 8) % 2 == 0) {
+				in_air = false;
+			} else {
+				in_air = true;
+			}
+
+			const char **current_frame = in_air ? wallaby_air : wallaby_ground;
+
+			/* Print the frame with horizontal offset */
+			for (j = 0; current_frame[j] != NULL; j++) {
+					shell_print(sh, "%*s%s", pos, "", current_frame[j]);
+			}
+			shell_print(sh, "----------------------------------------------------------------------------------");
+
+			k_msleep(120);  /* Animation speed */
+		}
+	}
+
+	shell_print(sh, "\n");
+
+	return 0;
+}
+
+SHELL_CMD_REGISTER(hop, NULL, "Make the wallaby hop across the screen.", cmd_hop);
+
 #if defined(CONFIG_RTC)
 static int rtc_init(void)
 {
