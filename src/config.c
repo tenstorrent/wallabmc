@@ -1,6 +1,7 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(stm32_bmc_config, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 
 #include <zephyr/shell/shell.h>
 #include <stdlib.h>

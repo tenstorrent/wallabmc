@@ -3,7 +3,7 @@
  */
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(stm32_bmc_fs, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wallabmc_fs, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>

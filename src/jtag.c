@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 #include <zephyr/kernel.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(jtag_daemon, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wallabmc_jtag, LOG_LEVEL_INF);
 
 #include <zephyr/posix/fcntl.h>
 #include <zephyr/drivers/gpio.h>

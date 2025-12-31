@@ -16,7 +16,7 @@
 #include "power.h"
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(web_server, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(wallabmc_webui, LOG_LEVEL_INF);
 
 static const uint8_t index_html_gz[] = {
 #include "index.html.gz.inc"
