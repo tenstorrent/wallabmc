@@ -60,6 +60,10 @@ target_sources_ifdef(CONFIG_JTAG app PRIVATE
 	src/jtag.c
 )
 
+target_sources_ifdef(CONFIG_CONSOLE_BRIDGE app PRIVATE
+	src/console_bridge.c
+)
+
 target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 	src/button.c
 	src/fs.c
