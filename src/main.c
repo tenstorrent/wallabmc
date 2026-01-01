@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "http.h"
 #include "power.h"
 #include "jtag.h"
+#include "console_bridge.h"
 
 static bool boot_finished = false;
 
@@ -230,6 +231,12 @@ int main(void)
 	LOG_DBG("HTTP server init");
 	if (app_http_server_init() < 0) {
 		LOG_ERR("HTTP server init failed");
+		return -1;
+	}
+
+	LOG_DBG("Console bridge init");
+	if (console_bridge_init() < 0) {
+		LOG_ERR("Console bridge init failed");
 		return -1;
 	}
 

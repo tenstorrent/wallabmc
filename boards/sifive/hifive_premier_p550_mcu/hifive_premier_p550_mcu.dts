@@ -60,6 +60,10 @@
 			gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
 			label = "ATXPSON";
 		};
+		uartmuxsel: uartmuxsel {
+			gpios = <&gpiob 15 GPIO_ACTIVE_HIGH>;
+			label = "UARTMUXSEL";
+		};
 	};
 
 
@@ -71,6 +75,7 @@
 		boot1 = &boot1;
 		dcen = &dcen;
 		atxpson = &atxpson;
+		uartmuxsel = &uartmuxsel;
 	};
 };
 
@@ -104,6 +109,28 @@
 	pinctrl-0 = <&usart3_tx_pd8 &usart3_rx_pd9>;
 	pinctrl-names = "default";
 	current-speed = <115200>;
+	status = "okay";
+};
+
+&uart4 {
+	pinctrl-0 = <&uart4_tx_pc10 &uart4_rx_pc11>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+};
+
+&usart6 {
+	pinctrl-0 = <&usart6_tx_pc6 &usart6_rx_pc7>;
+	pinctrl-names = "default";
+	current-speed = <115200>;
+	status = "okay";
+	dmas = <&dma2 6 5 STM32_DMA_PERIPH_TX STM32_DMA_FIFO_FULL>,
+	       <&dma2 1 5 (STM32_DMA_PERIPH_RX | STM32_DMA_MEM_8BITS | STM32_DMA_MODE_CYCLIC) STM32_DMA_FIFO_FULL>;
+	dma-names = "tx", "rx";
+	fifo-enable;
+};
+
+&dma2 {
 	status = "okay";
 };
 

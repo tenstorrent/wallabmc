@@ -217,5 +217,23 @@ config APP_STACK_DEBUG
 	select THREAD_NAME
 	select THREAD_ANALYZER
 	select THREAD_ANALYZER_RUN_UNLOCKED
+config CONSOLE_BRIDGE
+	bool "Console bridge (USART6 to TCP port 22)"
+	default y
+	select SERIAL
+	select SERIAL_SUPPORT_ASYNC
+	select UART_ASYNC_API
+
+if CONSOLE_BRIDGE
+
+config CONSOLE_BRIDGE_STACK_SIZE
+	int "Console bridge daemon stack size"
+	default 1024
+
+config CONSOLE_BRIDGE_PRIORITY
+	int "Console bridge daemon priority"
+	default 5
+
+endif
 
 source "Kconfig.zephyr"
