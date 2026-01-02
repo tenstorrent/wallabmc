@@ -13,10 +13,14 @@ jobs:
     container:
       image: zephyrprojectrtos/ci:latest
 
+    strategy:
+      matrix:
+        board: [nucleo_f767zi, hifive_premier_p550_mcu, qemu_cortex_m3]
+
     env:
       CMAKE_PREFIX_PATH: /opt/toolchains
       ZEPHYR_TOOLCHAIN_VARIANT: zephyr
-      BOARD: nucleo_f767zi
+      BOARD: ${{ matrix.board }}
 
     steps:
       - name: Checkout
@@ -55,7 +59,7 @@ jobs:
 
           # Initialize using the wallabmc repo as the manifest
           west init -l ../wallabmc
-          
+
           # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
           west update --narrow -o=--depth=1
 
@@ -63,11 +67,13 @@ jobs:
         working-directory: workspace
         run: |
           west build -p always -b $BOARD ../wallabmc
+          # hack to prevent CI failure, QEMU build does not create .hex
+          if [ "$BOARD" == "qemu_cortex_m3" ] ; then touch build/zephyr/zephyr.hex ; fi
 
       - name: Upload Firmware
         uses: actions/upload-artifact@v4
         with:
-          name: wallabmc-firmware
+          name: wallabmc-firmware-${{ matrix.board }}
           path: |
             workspace/build/zephyr/zephyr.hex
             workspace/build/zephyr/zephyr.bin
