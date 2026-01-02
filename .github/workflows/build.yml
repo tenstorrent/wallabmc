@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2204-large-stable
+    runs-on: tt-ubuntu-2404-large-stable
     container:
       image: zephyrprojectrtos/ci:latest
 
