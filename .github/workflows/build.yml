@@ -1,0 +1,74 @@
+name: Build WallabMC
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    # ubuntu-latest does not have enough space, use a large TT runner
+    runs-on: tt-ubuntu-2204-large-stable
+    container:
+      image: zephyrprojectrtos/ci:latest
+
+    env:
+      CMAKE_PREFIX_PATH: /opt/toolchains
+      ZEPHYR_TOOLCHAIN_VARIANT: zephyr
+      BOARD: nucleo_f767zi
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: wallabmc
+
+      - name: Detect Zephyr SDK
+        run: |
+          SDK_PATH=$(find /opt/toolchains -maxdepth 1 -type d -name "zephyr-sdk-*" | head -n 1)
+          if [ -z "$SDK_PATH" ]; then
+            echo "Error: Could not find Zephyr SDK in /opt/toolchains"
+            exit 1
+          fi
+          echo "ZEPHYR_SDK_INSTALL_DIR=$SDK_PATH" >> $GITHUB_ENV
+
+      - name: Create Workspace Directory
+        run: mkdir workspace
+
+      - name: Cache West Modules
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-zephyr-modules
+        with:
+          path: workspace
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('wallabmc/west.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+
+      - name: Initialize West Workspace
+        run: |
+          cd workspace
+          # Remove old .west config if it exists from cache to avoid conflicts
+          rm -rf .west
+
+          # Initialize using the wallabmc repo as the manifest
+          west init -l ../wallabmc
+          
+          # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
+          west update --narrow -o=--depth=1
+
+      - name: Build WallaBMC
+        working-directory: workspace
+        run: |
+          west build -p always -b $BOARD ../wallabmc
+
+      - name: Upload Firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallabmc-firmware
+          path: |
+            workspace/build/zephyr/zephyr.hex
+            workspace/build/zephyr/zephyr.bin
+            workspace/build/zephyr/zephyr.elf
