@@ -326,7 +326,7 @@ static void set_unauth_response(struct http_response_ctx *ctx)
 
 /* Redfish Version: GET /redfish */
 static int redfish_version_handler(struct http_client_ctx *client,
-				   enum http_data_status status,
+				   enum http_transaction_status status,
 				   const struct http_request_ctx *request_ctx,
 				   struct http_response_ctx *response_ctx,
 				   void *user_data)
@@ -338,10 +338,10 @@ static int redfish_version_handler(struct http_client_ctx *client,
 
 	/* Must not require auth */
 
-	if (status == HTTP_SERVER_DATA_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
 
-	if (status != HTTP_SERVER_DATA_FINAL)
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
 	int ret = json_obj_encode_buf(redfish_version_descr,
@@ -366,7 +366,7 @@ static int redfish_version_handler(struct http_client_ctx *client,
 
 /* Service Root: GET /redfish/v1/ */
 static int service_root_handler(struct http_client_ctx *client,
-		enum http_data_status status,
+		enum http_transaction_status status,
 		const struct http_request_ctx *request_ctx,
 		struct http_response_ctx *response_ctx,
 		void *user_data)
@@ -386,10 +386,10 @@ static int service_root_handler(struct http_client_ctx *client,
 
 	/* Must not require auth */
 
-	if (status == HTTP_SERVER_DATA_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
 
-	if (status != HTTP_SERVER_DATA_FINAL)
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
 	int ret = json_obj_encode_buf(service_root_descr,
@@ -414,7 +414,7 @@ static int service_root_handler(struct http_client_ctx *client,
 
 /* Systems Collection: GET /redfish/v1/Systems */
 static int systems_collection_handler(struct http_client_ctx *client,
-				      enum http_data_status status,
+				      enum http_transaction_status status,
 				      const struct http_request_ctx *request_ctx,
 				      struct http_response_ctx *response_ctx,
 				      void *user_data)
@@ -439,10 +439,10 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	if (status == HTTP_SERVER_DATA_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
 
-	if (status != HTTP_SERVER_DATA_FINAL)
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
 	int ret = json_obj_encode_buf(systems_collection_descr,
@@ -467,7 +467,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 /* System Info: GET /redfish/v1/Systems/system */
 static int system_info_handler(struct http_client_ctx *client,
-			       enum http_data_status status,
+			       enum http_transaction_status status,
 			       const struct http_request_ctx *request_ctx,
 			       struct http_response_ctx *response_ctx,
 			       void *user_data)
@@ -480,10 +480,10 @@ static int system_info_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	if (status == HTTP_SERVER_DATA_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
 
-	if (status != HTTP_SERVER_DATA_FINAL)
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
 	struct redfish_computer_system computer_system = {
@@ -541,7 +541,7 @@ static char payload_buf[128]; // Buffer for incoming JSON
 static size_t payload_len = 0;
 
 static int system_reset_handler(struct http_client_ctx *client,
-				enum http_data_status status,
+				enum http_transaction_status status,
 				const struct http_request_ctx *request_ctx,
 				struct http_response_ctx *response_ctx,
 				void *user_data)
@@ -552,7 +552,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	if (status == HTTP_SERVER_DATA_ABORTED) {
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED) {
 		payload_len = 0;
 		return 0;
 	}
@@ -576,7 +576,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 		}
 	}
 
-	if (status == HTTP_SERVER_DATA_FINAL) {
+	if (status == HTTP_SERVER_REQUEST_DATA_FINAL) {
 		payload_buf[payload_len] = '\0';
 
 		struct redfish_reset_payload payload;
