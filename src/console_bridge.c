@@ -38,8 +38,6 @@ BUILD_ASSERT(DT_NODE_EXISTS(USART6_NODE), "usart6 node missing");
 #if DT_NODE_EXISTS(UARTMUXSEL_NODE)
 static const struct gpio_dt_spec uartmuxsel_gpio = GPIO_DT_SPEC_GET(UARTMUXSEL_NODE, gpios);
 static bool uartmuxsel_initialized = false;
-#else
-static bool uartmuxsel_initialized = false;
 #endif
 
 static volatile int active_client_fd = -1;
