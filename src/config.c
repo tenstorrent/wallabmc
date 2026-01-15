@@ -198,6 +198,21 @@ static int write_config(void)
 	return copied;
 }
 
+int config_bmc_hostname_set(const char *hostname)
+{
+	int rc;
+
+	rc = net_do_set_hostname(hostname);
+	if (rc)
+		return rc;
+
+	strncpy(config_data.bmc_hostname, hostname, MAX_HOSTNAME_LEN);
+
+	config_dirty = true;
+
+	return 0;
+}
+
 #define CMD_HELP_BMC_HOSTNAME			\
 	"Configure BMC hostname\n"		\
 	"Usage: bmc hostname <hostname>"
@@ -213,16 +228,13 @@ static int cmd_config_bmc_hostname(const struct shell *sh, size_t argc, char **a
 		return -EAGAIN;
 	}
 
-	rc = net_do_set_hostname(argv[1]);
+	rc = config_bmc_hostname_set(argv[1]);
 	if (rc) {
 		shell_error(sh, "Could not set BMC hostname (err=%d)", rc);
 		return rc;
 	}
 
-	strncpy(config_data.bmc_hostname, argv[1], MAX_HOSTNAME_LEN);
 	shell_info(sh, "BMC hostname set to %s", config_data.bmc_hostname);
-
-	config_dirty = true;
 
 	return 0;
 }
@@ -242,18 +254,32 @@ static const char *config_default_ip4_string(void)
 	return default_ip4_str;
 }
 
-static int config_set_default_ip4(const char *str)
+int config_bmc_default_ip4_set(const char *str)
 {
-	static struct in_addr addr;
 	int rc;
 
-	rc = inet_pton(AF_INET, str, &addr);
-	if (rc != 1) {
-		LOG_ERR("Could not convert IPv4 address %s in_addr", str);
-		return -EINVAL;
+	if (str) {
+		static struct in_addr addr;
+
+		rc = inet_pton(AF_INET, str, &addr);
+		if (rc != 1) {
+			LOG_ERR("Could not convert IPv4 address %s in_addr", str);
+			return -EINVAL;
+		}
+
+		config_data.bmc_default_ip4 = addr.s_addr;
+	} else {
+		config_data.bmc_default_ip4 = 0;
 	}
 
-	config_data.bmc_default_ip4 = addr.s_addr;
+	/* Default address gets removed if this is */
+	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
+	if (rc) {
+		LOG_ERR("Could not apply BMC default IPv4 address (err=%d)", rc);
+		return rc;
+	}
+
+	config_dirty = true;
 
 	return 0;
 }
@@ -273,20 +299,30 @@ static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char 
 		return -EAGAIN;
 	}
 
-	rc = config_set_default_ip4(argv[1]);
+	rc = config_bmc_default_ip4_set(argv[1]);
 	if (rc) {
 		shell_error(sh, "Could not set BMC default IPv4 address (err=%d)", rc);
 		return rc;
 	}
 
-	/* Default address gets removed if this is */
-	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
-	if (rc) {
-		shell_error(sh, "Could not apply BMC default IPv4 address (err=%d)", rc);
-		return rc;
-	}
-
 	shell_info(sh, "BMC default IPv4 address set to %s", argv[1]);
+
+	return 0;
+}
+
+int config_bmc_use_dhcp4_set(bool use)
+{
+	if (use) {
+		if (config_data.bmc_use_dhcp4 == 1)
+			return 0;
+		config_data.bmc_use_dhcp4 = 1;
+		start_dhcp4();
+	} else {
+		if (config_data.bmc_use_dhcp4 == 0)
+			return 0;
+		config_data.bmc_use_dhcp4 = 0;
+		stop_dhcp4();
+	}
 
 	config_dirty = true;
 
@@ -307,22 +343,22 @@ static int cmd_config_bmc_dhcp4(const struct shell *sh, size_t argc, char **argv
 	}
 
 	if (!strcmp(argv[1], "enable")) {
-		if (config_data.bmc_use_dhcp4 == 1)
-			return 0;
-		config_data.bmc_use_dhcp4 = 1;
+		config_bmc_use_dhcp4_set(true);
 		shell_info(sh, "BMC DHCPv4 enabled");
-		start_dhcp4();
 	} else if (!strcmp(argv[1], "disable")) {
-		if (config_data.bmc_use_dhcp4 == 0)
-			return 0;
-		config_data.bmc_use_dhcp4 = 0;
+		config_bmc_use_dhcp4_set(false);
 		shell_info(sh, "BMC DHCPv4 disabled");
-		stop_dhcp4();
 	} else {
 		shell_error(sh, "bmc dhcpv4: unknown argument %s", argv[1]);
 		return -EINVAL;
 	}
 
+	return 0;
+}
+
+int config_bmc_password_set(const char *password)
+{
+	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
 	config_dirty = true;
 
 	return 0;
@@ -341,10 +377,8 @@ static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **a
 		return -EAGAIN;
 	}
 
-	strncpy(config_data.bmc_admin_password, argv[1], MAX_PW_LEN);
+	config_bmc_password_set(argv[1]);
 	shell_info(sh, "BMC admin password updated");
-
-	config_dirty = true;
 
 	return 0;
 }
@@ -356,6 +390,23 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
 	SHELL_CMD_ARG(dhcpv4,		NULL, CMD_HELP_BMC_DHCP4, cmd_config_bmc_dhcp4, 2, 0),
 	SHELL_SUBCMD_SET_END
 );
+
+int config_host_auto_poweron_set(bool on)
+{
+	if (on) {
+		if (config_data.host_auto_poweron == 1)
+			return 0;
+		config_data.host_auto_poweron = 1;
+	} else {
+		if (config_data.host_auto_poweron == 0)
+			return 0;
+		config_data.host_auto_poweron = 0;
+	}
+
+	config_dirty = true;
+
+	return 0;
+}
 
 #define CMD_HELP_HOST_AUTO_POWERON		\
 	"Host auto poweron enabled\n"		\
@@ -371,14 +422,10 @@ static int cmd_config_host_auto_poweron(const struct shell *sh, size_t argc, cha
 	}
 
 	if (!strcmp(argv[1], "enable")) {
-		if (config_data.host_auto_poweron == 1)
-			return 0;
-		config_data.host_auto_poweron = 1;
+		config_host_auto_poweron_set(true);
 		shell_info(sh, "Host auto poweron enabled");
 	} else if (!strcmp(argv[1], "disable")) {
-		if (config_data.host_auto_poweron == 0)
-			return 0;
-		config_data.host_auto_poweron = 0;
+		config_host_auto_poweron_set(false);
 		shell_info(sh, "Host auto poweron disabled");
 	}
 
