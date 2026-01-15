@@ -279,7 +279,7 @@ static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char 
 		return rc;
 	}
 
-	/* XXX: remove default address if it is 0? */
+	/* Default address gets removed if this is */
 	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
 	if (rc) {
 		shell_error(sh, "Could not apply BMC default IPv4 address (err=%d)", rc);
