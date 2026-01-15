@@ -334,6 +334,7 @@ static const struct http_header json_header[] = {
 
 /* "Basic" (not session based) authentication, uses HTTP Authorization header */
 HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "authorization");
+HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_x_auth_code, "x-auth-code");
 
 #define CREDENTIALS_MAX_LEN 64
 static int validate_auth(struct http_client_ctx *client)
@@ -393,16 +394,37 @@ static int validate_auth(struct http_client_ctx *client)
  * XXX: Zephyr could provide a send_http1_401 response to send a
  * canonical 401 header, but this still seems to work.
  */
-static void set_unauth_response(struct http_response_ctx *ctx)
+static void set_unauth_response(struct http_client_ctx *client,
+				struct http_response_ctx *ctx)
 {
 	static struct http_header extra_headers[] = {
 		{ .name = "www-authenticate", .value = "Basic realm=\"BMC\"" },
 	};
+	size_t header_count = client->header_capture_ctx.count;
+	const struct http_header *headers = client->header_capture_ctx.headers;
+	bool webui = false;
+
+	for (unsigned int i = 0; i < header_count; i++) {
+		if (!strcmp(headers[i].name, "x-auth-code") &&
+		    !strcmp(headers[i].value, "webui")) {
+			webui = true;
+			break;
+		}
+	}
 
 	ctx->status = HTTP_401_UNAUTHORIZED;
 	ctx->final_chunk = true;
-	ctx->headers = extra_headers;
-	ctx->header_count = ARRAY_SIZE(extra_headers);
+	if (!webui) {
+		/*
+		 * Special case hack for the JS request coming from the WebUI.
+		 * If we return a www-authenticate header here, the browser
+		 * intercepts it and pops up a standard HTTP login box, which
+		 * is not what we want (the JS interprets the request and
+		 * displays an authentication error).
+		 */
+		ctx->headers = extra_headers;
+		ctx->header_count = ARRAY_SIZE(extra_headers);
+	}
 	ctx->body = NULL;
 	ctx->body_len = 0;
 }
@@ -516,7 +538,7 @@ static int account_service_handler(struct http_client_ctx *client, enum http_tra
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -553,7 +575,7 @@ static int accounts_collection_handler(struct http_client_ctx *client, enum http
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -657,7 +679,7 @@ static int account_handler(struct http_client_ctx *client,
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -720,7 +742,7 @@ static int managers_collection_handler(struct http_client_ctx *client,
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -759,7 +781,7 @@ static int manager_handler(struct http_client_ctx *client,
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -820,7 +842,7 @@ static int ethernet_collection_handler(struct http_client_ctx *client, enum http
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -931,7 +953,7 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -1055,7 +1077,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -1158,7 +1180,7 @@ static int system_handler(struct http_client_ctx *client,
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 
@@ -1237,7 +1259,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
-		set_unauth_response(response_ctx);
+		set_unauth_response(client, response_ctx);
 		return 0;
 	}
 

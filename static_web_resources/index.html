@@ -466,8 +466,9 @@
 					headers: {
 						'authorization': basicAuthHeader,
 						'accept': 'application/json',
-						'content-type': 'application/json'
-					}
+						'content-type': 'application/json',
+						'x-auth-code': 'webui',
+					},
 				};
 				if (body)
 					options.body = JSON.stringify(body);
