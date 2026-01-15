@@ -28,6 +28,12 @@ LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
 static char serial_number[] = "12345";
 
+/* This is racy because several requests could be concurrently processing */
+/* XXX: must fix and make these per-client */
+static char out_buffer[1024];
+static char in_buffer[128];
+static size_t in_buffer_len;
+
 void set_power_state(bool on)
 {
 	int ret;
@@ -331,7 +337,6 @@ static int redfish_version_handler(struct http_client_ctx *client,
 				   struct http_response_ctx *response_ctx,
 				   void *user_data)
 {
-	static char buffer[256];
 	const struct redfish_version version = {
 		.v1 = "/redfish/v1/"
 	};
@@ -346,7 +351,7 @@ static int redfish_version_handler(struct http_client_ctx *client,
 
 	int ret = json_obj_encode_buf(redfish_version_descr,
 				       ARRAY_SIZE(redfish_version_descr),
-				       &version, buffer, sizeof(buffer));
+				       &version, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode redfish version: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
@@ -354,8 +359,8 @@ static int redfish_version_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)buffer;
-	response_ctx->body_len = strlen(buffer);
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
 	response_ctx->headers = json_header;
 	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
@@ -371,7 +376,6 @@ static int service_root_handler(struct http_client_ctx *client,
 		struct http_response_ctx *response_ctx,
 		void *user_data)
 {
-	static char buffer[512];
 	const struct redfish_service_root service_root = {
 		.odata_type = "#ServiceRoot.v1_16_1.ServiceRoot",
 		.odata_id = "/redfish/v1/",
@@ -394,7 +398,7 @@ static int service_root_handler(struct http_client_ctx *client,
 
 	int ret = json_obj_encode_buf(service_root_descr,
 				       ARRAY_SIZE(service_root_descr),
-				       &service_root, buffer, sizeof(buffer));
+				       &service_root, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode service root: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
@@ -402,8 +406,8 @@ static int service_root_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)buffer;
-	response_ctx->body_len = strlen(buffer);
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
 	response_ctx->headers = json_header;
 	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
@@ -419,7 +423,6 @@ static int systems_collection_handler(struct http_client_ctx *client,
 				      struct http_response_ctx *response_ctx,
 				      void *user_data)
 {
-	static char buffer[512];
 	struct redfish_systems_collection systems_collection = {
 		.odata_id = "/redfish/v1/Systems",
 		.odata_type = "#ComputerSystemCollection.ComputerSystemCollection",
@@ -447,7 +450,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 	int ret = json_obj_encode_buf(systems_collection_descr,
 				       ARRAY_SIZE(systems_collection_descr),
-				       &systems_collection, buffer, sizeof(buffer));
+				       &systems_collection, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode systems collection: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
@@ -455,8 +458,8 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)buffer;
-	response_ctx->body_len = strlen(buffer);
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
 	response_ctx->headers = json_header;
 	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
@@ -472,8 +475,6 @@ static int system_info_handler(struct http_client_ctx *client,
 			       struct http_response_ctx *response_ctx,
 			       void *user_data)
 {
-	static char buffer[1024]; // Static to persist for response duration
-
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(response_ctx);
@@ -518,7 +519,7 @@ static int system_info_handler(struct http_client_ctx *client,
 
 	int ret = json_obj_encode_buf(computer_system_descr,
 				       ARRAY_SIZE(computer_system_descr),
-				       &computer_system, buffer, sizeof(buffer));
+				       &computer_system, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode computer system: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
@@ -526,8 +527,8 @@ static int system_info_handler(struct http_client_ctx *client,
 		return 0;
 	}
 
-	response_ctx->body = (uint8_t *)buffer;
-	response_ctx->body_len = strlen(buffer);
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
 	response_ctx->headers = json_header;
 	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
@@ -537,9 +538,6 @@ static int system_info_handler(struct http_client_ctx *client,
 }
 
 /* 3. Action: POST /redfish/v1/Systems/system/Actions/ComputerSystem.Reset */
-static char payload_buf[128]; // Buffer for incoming JSON
-static size_t payload_len = 0;
-
 static int system_reset_handler(struct http_client_ctx *client,
 				enum http_transaction_status status,
 				const struct http_request_ctx *request_ctx,
@@ -553,7 +551,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 	}
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED) {
-		payload_len = 0;
+		in_buffer_len = 0;
 		return 0;
 	}
 
@@ -565,9 +563,9 @@ static int system_reset_handler(struct http_client_ctx *client,
 
 	// Accumulate data
 	if (request_ctx->data && request_ctx->data_len > 0) {
-		if (payload_len + request_ctx->data_len < sizeof(payload_buf)) {
-			memcpy(payload_buf + payload_len, request_ctx->data, request_ctx->data_len);
-			payload_len += request_ctx->data_len;
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
 		} else {
 			LOG_ERR("Payload too large");
 			response_ctx->status = HTTP_400_BAD_REQUEST;
@@ -577,10 +575,10 @@ static int system_reset_handler(struct http_client_ctx *client,
 	}
 
 	if (status == HTTP_SERVER_REQUEST_DATA_FINAL) {
-		payload_buf[payload_len] = '\0';
+		in_buffer[in_buffer_len] = '\0';
 
 		struct redfish_reset_payload payload;
-		int ret = json_obj_parse(payload_buf, payload_len, reset_descr,
+		int ret = json_obj_parse(in_buffer, in_buffer_len, reset_descr,
 				ARRAY_SIZE(reset_descr), &payload);
 
 		if (ret < 0) {
@@ -603,7 +601,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 			}
 		}
 
-		payload_len = 0; // Reset for next request
+		in_buffer_len = 0; // Reset for next request
 		response_ctx->final_chunk = true;
 	}
 
