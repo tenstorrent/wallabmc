@@ -73,6 +73,18 @@ target_sources_ifdef(CONFIG_REDFISH app PRIVATE
 	src/redfish.c
 )
 
+if(CONFIG_REDFISH)
+  foreach(redfish_resource
+    redfish_metadata.xml
+  )
+    generate_inc_file_for_target(app
+      static_web_resources/${redfish_resource}
+      ${gen_dir}/${redfish_resource}.gz.inc
+      --gzip
+    )
+  endforeach()
+endif()
+
 if(CONFIG_APP_WEB)
   foreach(web_resource
     index.html

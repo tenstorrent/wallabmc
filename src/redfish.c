@@ -114,6 +114,34 @@ static const struct json_obj_descr link_descr[] = {
 				  odata_id, JSON_TOK_STRING),
 };
 
+/* odata value */
+struct redfish_odata_value {
+	const char *name;
+	const char *kind;
+	const char *url;
+};
+static const struct json_obj_descr odata_value_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "kind",
+				  kind, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "url",
+				  url, JSON_TOK_STRING),
+};
+
+/* odata */
+struct redfish_odata {
+	const char *odata_context;
+	size_t value_count;
+	struct redfish_odata_value value[4];
+};
+static const struct json_obj_descr odata_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata, "@odata.context",
+				  odata_context, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_odata, "value", value,
+		       4, value_count, odata_value_descr, ARRAY_SIZE(odata_value_descr)),
+};
+
 /* Service Root response */
 struct redfish_service_root {
 	const char *odata_type;
@@ -173,7 +201,7 @@ static const struct json_obj_descr account_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
 	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING), 
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING),
 };
 
 /* DHCPv4 */
@@ -212,9 +240,9 @@ static const struct json_obj_descr ethernet_interface_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.id", odata_id, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "HostName", host_name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_ethernet_interface, "DHCPv4", dhcp_v4, dhcp_v4_descr),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses, 
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses,
 		       1, ipv4_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4StaticAddresses", ipv4_static_addresses, 
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4StaticAddresses", ipv4_static_addresses,
 		       1, ipv4_static_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
 };
 
@@ -552,6 +580,53 @@ static int service_root_handler(struct http_client_ctx *client,
 				       &service_root, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode service root: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* odata: GET /redfish/v1/odata */
+static int odata_handler(struct http_client_ctx *client,
+		enum http_transaction_status status,
+		const struct http_request_ctx *request_ctx,
+		struct http_response_ctx *response_ctx,
+		void *user_data)
+{
+	const struct redfish_odata odata = {
+		.odata_context = "/redfish/v1/$metadata",
+		.value_count = 4,
+		.value = {
+			{ .name = "Service", .kind = "Singleton", .url = "/redfish/v1/", },
+			{ .name = "Systems", .kind = "Singleton", .url = "/redfish/v1/Systems", },
+			{ .name = "Managers", .kind = "Singleton", .url = "/redfish/v1/Managers", },
+			{ .name = "AccountService", .kind = "Singleton", .url = "/redfish/v1/AccountService", },
+		},
+	};
+
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
+	/* Must not require auth */
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(odata_descr,
+				       ARRAY_SIZE(odata_descr),
+				       &odata, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode odata: %d", ret);
 		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
 		response_ctx->final_chunk = true;
 		return 0;
@@ -1398,6 +1473,16 @@ static struct http_resource_detail_dynamic root_detail = {
 	.user_data = NULL,
 };
 
+// odata
+static struct http_resource_detail_dynamic odata_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = -1U,
+	},
+	.cb = odata_handler,
+	.user_data = NULL,
+};
+
 // AccountService
 static struct http_resource_detail_dynamic account_service_detail = {
 	.common = {
@@ -1498,6 +1583,21 @@ static struct http_resource_detail_dynamic account_detail = {
 	.user_data = NULL,
 };
 
+static const uint8_t redfish_metadata_xml_gz[] = {
+#include "redfish_metadata.xml.gz.inc"
+};
+
+static struct http_resource_detail_static redfish_metadata_xml_gz_resource_detail = {
+	.common = {
+			.type = HTTP_RESOURCE_TYPE_STATIC,
+			.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+			.content_encoding = "gzip",
+			.content_type = "application/xml",
+		},
+	.static_data = redfish_metadata_xml_gz,
+	.static_data_len = sizeof(redfish_metadata_xml_gz),
+};
+
 // Don't forget HTTPS versions if CONFIG_APP_HTTPS is defined!
 
 HTTP_RESOURCE_DEFINE(redfish_version, http_service,
@@ -1508,6 +1608,10 @@ HTTP_RESOURCE_DEFINE(redfish_root, http_service,
 		"/redfish/v1/", &root_detail);
 HTTP_RESOURCE_DEFINE(redfish_root_no_slash, http_service,
 		"/redfish/v1", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_metadata_xml_gz_resource, http_service,
+		"/redfish/v1/$metadata", &redfish_metadata_xml_gz_resource_detail);
+HTTP_RESOURCE_DEFINE(redfish_odata, http_service,
+		"/redfish/v1/odata", &odata_detail);
 HTTP_RESOURCE_DEFINE(redfish_account_service, http_service,
 		"/redfish/v1/AccountService", &account_service_detail);
 HTTP_RESOURCE_DEFINE(redfish_accounts_collection, http_service,
@@ -1539,6 +1643,10 @@ HTTP_RESOURCE_DEFINE(redfish_root_https, https_service,
 		"/redfish/v1/", &root_detail);
 HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, https_service,
 		"/redfish/v1", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_metadata_xml_gz_resource_https, https_service,
+		"/redfish/v1/$metadata", &redfish_metadata_xml_gz_resource_detail);
+HTTP_RESOURCE_DEFINE(redfish_odata_https, https_service,
+		"/redfish/v1/odata", &odata_detail);
 HTTP_RESOURCE_DEFINE(redfish_account_service_https, https_service,
 		"/redfish/v1/AccountService", &account_service_detail);
 HTTP_RESOURCE_DEFINE(redfish_accounts_collection_https, https_service,
