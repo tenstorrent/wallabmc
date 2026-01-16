@@ -11,6 +11,7 @@
  */
 
 #include <zephyr/kernel.h>
+#include <zephyr/net/net_ip.h>
 #include <zephyr/net/http/server.h>
 #include <zephyr/net/http/service.h>
 #include <zephyr/net/tls_credentials.h>
@@ -51,29 +52,66 @@ void set_power_state(bool on)
 	LOG_INF("System Power State changed to: %s", get_power_state() ? "ON" : "OFF");
 }
 
-static const struct http_header json_header[] = {
-	{.name = "content-type", .value = "application/json"}
-};
+/*** Structures for JSON encoding ***/
 
 struct redfish_reset_payload {
 	const char *reset_type;
 };
-
 static const struct json_obj_descr reset_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_reset_payload, "ResetType",
 				  reset_type, JSON_TOK_STRING)
 };
 
-/* Structures for JSON encoding */
-
 /* Redfish Version response */
 struct redfish_version {
 	const char *v1;
 };
+static const struct json_obj_descr version_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_version, "v1",
+				  v1, JSON_TOK_STRING),
+};
 
-/* Service Root: Systems nested object */
-struct redfish_systems_ref {
+/* Collection: Member nested object */
+struct redfish_member {
 	const char *odata_id;
+};
+static const struct json_obj_descr member_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_member, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+};
+
+/* Collection response */
+struct redfish_collection {
+	const char *odata_id;
+	const char *odata_type;
+	const char *name;
+	int32_t members_count;
+	size_t members_len;
+	struct redfish_member members[1];
+};
+static const struct json_obj_descr collection_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection,
+				  "Members@odata.count", members_count,
+				  JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_collection,
+				       "Members", members, 1,
+				       members_len, member_descr,
+				       ARRAY_SIZE(member_descr)),
+};
+
+/* Redfish Link (nested by others) */
+struct redfish_link {
+	const char *odata_id;
+};
+static const struct json_obj_descr link_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_link, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
 };
 
 /* Service Root response */
@@ -84,80 +122,10 @@ struct redfish_service_root {
 	const char *name;
 	const char *redfish_version;
 	const char *uuid;
-	struct redfish_systems_ref systems;
+	struct redfish_link account_service;
+	struct redfish_link systems;
+	struct redfish_link managers;
 };
-
-/* Systems Collection: Member object */
-struct redfish_system_member {
-	const char *odata_id;
-};
-
-/* Systems Collection response */
-struct redfish_systems_collection {
-	const char *odata_id;
-	const char *odata_type;
-	const char *name;
-	int32_t members_count;
-	struct redfish_system_member members[1];
-	size_t members_len;
-};
-
-/* System Info: ResetType array */
-struct redfish_reset_action {
-	const char *target;
-	const char *reset_type_values[3];
-	size_t reset_type_values_len;
-};
-
-/* System Info: Actions nested object */
-struct redfish_actions {
-	struct redfish_reset_action reset_action;
-};
-
-/* System Info: ProcessorSummary nested object */
-struct redfish_processor_summary {
-	int32_t count;
-	const char *description;
-};
-
-/* System Info: MemorySummary nested object */
-struct redfish_memory_summary {
-	int32_t total_system_GiB;
-};
-
-
-/* System Info response */
-struct redfish_computer_system {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *uuid;
-	const char *name;
-	const char *manufacturer;
-	const char *model;
-	const char *host_name;
-	const char *power_state;
-	const char *serial_number;
-	struct redfish_processor_summary processor_summary;
-	struct redfish_memory_summary memory_summary;
-	struct redfish_actions actions;
-};
-
-/* JSON descriptors for encoding */
-
-/* Redfish Version descriptor */
-static const struct json_obj_descr redfish_version_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_version, "v1",
-				  v1, JSON_TOK_STRING),
-};
-
-/* Service Root: Systems nested object descriptor */
-static const struct json_obj_descr systems_ref_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_ref, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-};
-
-/* Service Root descriptor */
 static const struct json_obj_descr service_root_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
 				  odata_type, JSON_TOK_STRING),
@@ -171,34 +139,107 @@ static const struct json_obj_descr service_root_descr[] = {
 				  redfish_version, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "UUID",
 				  uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "AccountService",
+				    account_service, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Managers",
+				    managers, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
-				    systems, systems_ref_descr),
+				    systems, link_descr),
 };
 
-/* Systems Collection: Member object descriptor */
-static const struct json_obj_descr system_member_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_system_member, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
+/* Account Service */
+struct redfish_account_service {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	struct redfish_link accounts;
+};
+static const struct json_obj_descr account_service_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_account_service, "Accounts", accounts, link_descr),
 };
 
-/* Systems Collection descriptor */
-static const struct json_obj_descr systems_collection_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "@odata.type",
-				  odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection, "Name",
-				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_systems_collection,
-				  "Members@odata.count", members_count,
-				  JSON_TOK_NUMBER),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_systems_collection,
-				       "Members", members, 1,
-				       members_len, system_member_descr,
-				       ARRAY_SIZE(system_member_descr)),
+/* Account */
+struct redfish_account {
+	const char *odata_id;
+	const char *user_name;
+	const char *password; // Write-only
+};
+static const struct json_obj_descr account_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
 };
 
-/* System Info: Reset action descriptor */
+/* DHCPv4 */
+struct redfish_dhcp_v4 {
+	bool dhcp_enabled;
+};
+static const struct json_obj_descr dhcp_v4_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_dhcp_v4, "DHCPEnabled", dhcp_enabled, JSON_TOK_TRUE),
+};
+
+/* IPv4Address */
+struct redfish_ipv4_addr {
+	const char *address;
+	const char *subnet_mask;
+	const char *gateway;
+	const char *address_origin;
+};
+static const struct json_obj_descr ipv4_addr_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Address", address, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "SubnetMask", subnet_mask, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Gateway", gateway, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "AddressOrigin", address_origin, JSON_TOK_STRING),
+};
+
+/* EthInterface */
+struct redfish_ethernet_interface {
+	const char *odata_id;
+	const char *host_name;
+	struct redfish_dhcp_v4 dhcp_v4;
+	struct redfish_ipv4_addr ipv4_addresses[1];
+	size_t ipv4_count;
+	struct redfish_ipv4_addr ipv4_static_addresses[1];
+	size_t ipv4_static_count;
+};
+static const struct json_obj_descr ethernet_interface_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "HostName", host_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_ethernet_interface, "DHCPv4", dhcp_v4, dhcp_v4_descr),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses, 
+		       1, ipv4_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4StaticAddresses", ipv4_static_addresses, 
+		       1, ipv4_static_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
+};
+
+/* Manager */
+struct redfish_manager {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	const char *uuid;
+	struct redfish_link ethernet_interfaces;
+};
+static const struct json_obj_descr manager_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "UUID", uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "EthernetInterfaces", ethernet_interfaces, link_descr),
+};
+
+/* System Info: ResetType array */
+struct redfish_reset_action {
+	const char *target;
+	const char *reset_type_values[3];
+	size_t reset_type_values_len;
+};
 static const struct json_obj_descr reset_action_descr[] = {
 	JSON_OBJ_DESCR_PRIM(struct redfish_reset_action, target, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_reset_action,
@@ -207,13 +248,20 @@ static const struct json_obj_descr reset_action_descr[] = {
 				   JSON_TOK_STRING),
 };
 
-/* System Info: Actions nested object descriptor */
+/* System Info: Actions nested object */
+struct redfish_actions {
+	struct redfish_reset_action reset_action;
+};
 static const struct json_obj_descr actions_descr[] = {
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_actions, "#ComputerSystem.Reset",
 				    reset_action, reset_action_descr),
 };
 
-/* System Info: ProcessorSummary nested object descriptor */
+/* System Info: ProcessorSummary nested object */
+struct redfish_processor_summary {
+	int32_t count;
+	const char *description;
+};
 static const struct json_obj_descr processor_summary_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
 				  count, JSON_TOK_NUMBER),
@@ -221,13 +269,32 @@ static const struct json_obj_descr processor_summary_descr[] = {
 				  description, JSON_TOK_STRING),
 };
 
-/* System Info: MemorySummary nested object descriptor */
+/* System Info: MemorySummary nested object */
+struct redfish_memory_summary {
+	int32_t total_system_GiB;
+};
 static const struct json_obj_descr memory_summary_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_memory_summary, "TotalSystemMemoryGiB",
 				  total_system_GiB, JSON_TOK_NUMBER),
 };
 
-/* System Info descriptor */
+/* System Info response */
+struct redfish_computer_system {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *uuid;
+	const char *name;
+	const char *manufacturer;
+	const char *model;
+	const char *host_name;
+	const char *power_restore_policy;
+	const char *power_state;
+	const char *serial_number;
+	struct redfish_processor_summary processor_summary;
+	struct redfish_memory_summary memory_summary;
+	struct redfish_actions actions;
+};
 static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
 				  odata_id, JSON_TOK_STRING),
@@ -243,6 +310,8 @@ static const struct json_obj_descr computer_system_descr[] = {
 				  manufacturer, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
 				  model, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerRestorePolicy",
+				  power_restore_policy, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
 				  power_state, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
@@ -253,6 +322,12 @@ static const struct json_obj_descr computer_system_descr[] = {
 				    memory_summary, memory_summary_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
+};
+
+/*** Redfish HTTP handlers ***/
+
+static const struct http_header json_header[] = {
+	{.name = "content-type", .value = "application/json"}
 };
 
 /* "Basic" (not session based) authentication, uses HTTP Authorization header */
@@ -349,8 +424,8 @@ static int redfish_version_handler(struct http_client_ctx *client,
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
-	int ret = json_obj_encode_buf(redfish_version_descr,
-				       ARRAY_SIZE(redfish_version_descr),
+	int ret = json_obj_encode_buf(version_descr,
+				       ARRAY_SIZE(version_descr),
 				       &version, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode redfish version: %d", ret);
@@ -383,9 +458,15 @@ static int service_root_handler(struct http_client_ctx *client,
 		.name = "Root Service",
 		.redfish_version = "1.15.0",
 		.uuid = "92384634-2938-2342-8820-489239905423",
+		.account_service = {
+			.odata_id = "/redfish/v1/AccountService"
+		},
+		.managers = {
+			.odata_id = "/redfish/v1/Managers"
+		},
 		.systems = {
 			.odata_id = "/redfish/v1/Systems"
-		}
+		},
 	};
 
 	/* Must not require auth */
@@ -416,6 +497,403 @@ static int service_root_handler(struct http_client_ctx *client,
 	return 0;
 }
 
+/* GET /redfish/v1/AccountService */
+static int account_service_handler(struct http_client_ctx *client, enum http_transaction_status status,
+				   const struct http_request_ctx *request_ctx,
+				   struct http_response_ctx *response_ctx, void *user_data)
+{
+	struct redfish_account_service account_service = {
+		.odata_id = "/redfish/v1/AccountService",
+		.odata_type = "#AccountService.v1_10_0.AccountService",
+		.id = "AccountService",
+		.name = "Account Service",
+		.accounts = {
+			.odata_id = "/redfish/v1/AccountService/Accounts",
+		},
+	};
+
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(account_service_descr,
+				       ARRAY_SIZE(account_service_descr),
+				       &account_service, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode account service: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* GET /redfish/v1/AccountService/Accounts */
+static int accounts_collection_handler(struct http_client_ctx *client, enum http_transaction_status status,
+				       const struct http_request_ctx *request_ctx,
+				       struct http_response_ctx *response_ctx, void *user_data)
+{
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	struct redfish_collection accounts_collection = {
+		.odata_id = "/redfish/v1/AccountService/Accounts",
+		.odata_type = "#ManagerAccountCollection.ManagerAccountCollection",
+		.name = "Accounts Collection",
+		.members_count = 1,
+		.members = {
+			{
+				.odata_id = "/redfish/v1/AccountService/Accounts/1",
+			},
+		},
+		.members_len = 1,
+	};
+
+	int ret = json_obj_encode_buf(collection_descr,
+				       ARRAY_SIZE(collection_descr),
+				       &accounts_collection, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode manager: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* Account: GET /redfish/v1/AccountService/Account/1 */
+static int account_handler(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	struct redfish_account account = {
+		.odata_id = "/redfish/v1/AccountService/Accounts/1",
+		.user_name = "admin",
+	};
+
+	int ret = json_obj_encode_buf(account_descr,
+				       ARRAY_SIZE(account_descr),
+				       &account, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode account: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* Managers Collection: GET /redfish/v1/Managers */
+static int managers_collection_handler(struct http_client_ctx *client,
+				      enum http_transaction_status status,
+				      const struct http_request_ctx *request_ctx,
+				      struct http_response_ctx *response_ctx,
+				      void *user_data)
+{
+	struct redfish_collection managers_collection = {
+		.odata_id = "/redfish/v1/Managers",
+		.odata_type = "#ManagerCollection.ManagerCollection",
+		.name = "Manager Collection",
+		.members_count = 1,
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Managers/bmc"
+			}
+		},
+		.members_len = 1
+	};
+
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(collection_descr,
+				       ARRAY_SIZE(collection_descr),
+				       &managers_collection, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode managers collection: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* Manager Info: GET /redfish/v1/Managers/bmc */
+static int manager_handler(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	struct redfish_manager manager = {
+		.odata_id = "/redfish/v1/Managers/bmc",
+		.odata_type = "#Manager.v1_11_0.Manager",
+		.id = "bmc",
+		.uuid = "58893887-8974-2487-2389-389233423423",
+		.name = "WallaBMC",
+		.ethernet_interfaces = {
+			.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
+		},
+	};
+
+	int ret = json_obj_encode_buf(manager_descr,
+				       ARRAY_SIZE(manager_descr),
+				       &manager, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode manager: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* GET /redfish/v1/Managers/bmc/EthernetInterfaces */
+static int ethernet_collection_handler(struct http_client_ctx *client, enum http_transaction_status status,
+				       const struct http_request_ctx *request_ctx,
+				       struct http_response_ctx *response_ctx, void *user_data)
+{
+	struct redfish_collection managers_collection = {
+		.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
+		.odata_type = "#EthernetInterfaceCollection.EthernetInterfaceCollection",
+		.name = "Ethernet Interface Collection",
+		.members_count = 1,
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0"
+			}
+		},
+		.members_len = 1
+	};
+
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	int ret = json_obj_encode_buf(collection_descr,
+				       ARRAY_SIZE(collection_descr),
+				       &managers_collection, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode managers collection: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* GET /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
+static int ethernet_handler(struct http_client_ctx *client, enum http_transaction_status status,
+			    const struct http_request_ctx *request_ctx,
+			    struct http_response_ctx *response_ctx, void *user_data)
+{
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	struct redfish_ethernet_interface ethernet_interface = {
+		.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
+		.host_name = net_hostname_get(),
+		.dhcp_v4 = { .dhcp_enabled = config_bmc_use_dhcp4(), },
+		.ipv4_count = 0,
+		.ipv4_static_count = 0,
+		.ipv4_static_addresses = {
+			{
+				.address = "0.0.0.0",
+				.subnet_mask = "0.0.0.0",
+				.gateway = "0.0.0.0",
+			},
+		},
+	};
+
+	struct net_if *iface = net_if_get_default();
+	char ip_str[NET_IPV4_ADDR_LEN];
+	char nm_str[NET_IPV4_ADDR_LEN];
+	char gw_str[NET_IPV4_ADDR_LEN];
+
+	if (iface) {
+		struct redfish_ipv4_addr *redfish_addr = &ethernet_interface.ipv4_addresses[0];
+		const struct net_if_ipv4 *ipv4 = iface->config.ip.ipv4;
+
+		for (int i = 0; i < NET_IF_MAX_IPV4_ADDR; i++) {
+			const struct net_if_addr_ipv4 *addr = &ipv4->unicast[i];
+
+			if (addr->ipv4.is_used) {
+				ethernet_interface.ipv4_count = 1;
+				net_addr_ntop(AF_INET, &addr->ipv4.address.in_addr, ip_str, sizeof(ip_str));
+				redfish_addr->address = ip_str;
+				net_addr_ntop(AF_INET, &addr->netmask, nm_str, sizeof(nm_str));
+				redfish_addr->subnet_mask = nm_str;
+				if (addr->ipv4.addr_type == NET_ADDR_DHCP)
+					redfish_addr->address_origin = "DHCP";
+				else if (addr->ipv4.addr_type == NET_ADDR_MANUAL ||
+					 addr->ipv4.addr_type == NET_ADDR_OVERRIDABLE)
+					redfish_addr->address_origin = "Static";
+				else
+					redfish_addr->address_origin = "Unknown";
+
+				if (addr->ipv4.addr_state == NET_ADDR_PREFERRED)
+					break;
+			}
+		}
+
+		if (ethernet_interface.ipv4_count == 1) {
+			const struct net_in_addr gw_addr = net_if_ipv4_get_gw(iface);
+
+			if (gw_addr.s_addr) {
+				net_addr_ntop(AF_INET, &gw_addr, gw_str, sizeof(gw_str));
+				redfish_addr->gateway = gw_str;
+			} else {
+				redfish_addr->gateway = "0.0.0.0";
+			}
+		}
+	}
+
+	char static_ip_str[NET_IPV4_ADDR_LEN];
+	if (config_bmc_default_ip4()) {
+		uint32_t addr = config_bmc_default_ip4();
+		ethernet_interface.ipv4_static_count = 1,
+		net_addr_ntop(AF_INET, &addr, static_ip_str, sizeof(static_ip_str));
+		ethernet_interface.ipv4_static_addresses[0].address = static_ip_str;
+		ethernet_interface.ipv4_static_addresses[0].subnet_mask = "255.255.255.0"; /* XXX: configure? */
+	}
+
+	int ret = json_obj_encode_buf(ethernet_interface_descr,
+				       ARRAY_SIZE(ethernet_interface_descr),
+				       &ethernet_interface, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode computer system: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->headers = json_header;
+	response_ctx->header_count = ARRAY_SIZE(json_header);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
 /* Systems Collection: GET /redfish/v1/Systems */
 static int systems_collection_handler(struct http_client_ctx *client,
 				      enum http_transaction_status status,
@@ -423,7 +901,7 @@ static int systems_collection_handler(struct http_client_ctx *client,
 				      struct http_response_ctx *response_ctx,
 				      void *user_data)
 {
-	struct redfish_systems_collection systems_collection = {
+	struct redfish_collection systems_collection = {
 		.odata_id = "/redfish/v1/Systems",
 		.odata_type = "#ComputerSystemCollection.ComputerSystemCollection",
 		.name = "Computer System Collection",
@@ -448,8 +926,8 @@ static int systems_collection_handler(struct http_client_ctx *client,
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
-	int ret = json_obj_encode_buf(systems_collection_descr,
-				       ARRAY_SIZE(systems_collection_descr),
+	int ret = json_obj_encode_buf(collection_descr,
+				       ARRAY_SIZE(collection_descr),
 				       &systems_collection, out_buffer, sizeof(out_buffer));
 	if (ret < 0) {
 		LOG_ERR("Failed to encode systems collection: %d", ret);
@@ -469,11 +947,11 @@ static int systems_collection_handler(struct http_client_ctx *client,
 }
 
 /* System Info: GET /redfish/v1/Systems/system */
-static int system_info_handler(struct http_client_ctx *client,
-			       enum http_transaction_status status,
-			       const struct http_request_ctx *request_ctx,
-			       struct http_response_ctx *response_ctx,
-			       void *user_data)
+static int system_handler(struct http_client_ctx *client,
+			  enum http_transaction_status status,
+			  const struct http_request_ctx *request_ctx,
+			  struct http_response_ctx *response_ctx,
+			  void *user_data)
 {
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
@@ -503,6 +981,7 @@ static int system_info_handler(struct http_client_ctx *client,
 			.total_system_GiB = 32,
 		},
 		.serial_number = serial_number,
+		.power_restore_policy = config_host_auto_poweron() ? "AlwaysOn" : "AlwaysOff",
 		.power_state = get_power_state() ? "On" : "Off",
 		.actions = {
 			.reset_action = {
@@ -544,6 +1023,9 @@ static int system_reset_handler(struct http_client_ctx *client,
 				struct http_response_ctx *response_ctx,
 				void *user_data)
 {
+	struct redfish_reset_payload payload;
+	int ret;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(response_ctx);
@@ -570,40 +1052,41 @@ static int system_reset_handler(struct http_client_ctx *client,
 			LOG_ERR("Payload too large");
 			response_ctx->status = HTTP_400_BAD_REQUEST;
 			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
 			return 0;
 		}
 	}
 
-	if (status == HTTP_SERVER_REQUEST_DATA_FINAL) {
-		in_buffer[in_buffer_len] = '\0';
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
 
-		struct redfish_reset_payload payload;
-		int ret = json_obj_parse(in_buffer, in_buffer_len, reset_descr,
-				ARRAY_SIZE(reset_descr), &payload);
+	in_buffer[in_buffer_len] = '\0';
 
-		if (ret < 0) {
-			response_ctx->status = HTTP_400_BAD_REQUEST;
-			response_ctx->final_chunk = true;
+	memset(&payload, 0, sizeof(payload));
+	ret = json_obj_parse(in_buffer, in_buffer_len, reset_descr,
+			ARRAY_SIZE(reset_descr), &payload);
+	in_buffer_len = 0; // Reset for next request
+
+	if (ret < 0) {
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+	} else {
+		LOG_INF("Reset Action: %s", payload.reset_type);
+
+		if (strcmp(payload.reset_type, "On") == 0) {
+			set_power_state(true);
+			response_ctx->status = HTTP_204_NO_CONTENT; // Standard Redfish success
+		} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
+			set_power_state(false);
+			response_ctx->status = HTTP_204_NO_CONTENT;
+		} else if (strcmp(payload.reset_type, "PowerCycle") == 0) {
+			power_reset();
+			response_ctx->status = HTTP_204_NO_CONTENT;
 		} else {
-			LOG_INF("Reset Action: %s", payload.reset_type);
-
-			if (strcmp(payload.reset_type, "On") == 0) {
-				set_power_state(true);
-				response_ctx->status = HTTP_204_NO_CONTENT; // Standard Redfish success
-			} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
-				set_power_state(false);
-				response_ctx->status = HTTP_204_NO_CONTENT;
-			} else if (strcmp(payload.reset_type, "PowerCycle") == 0) {
-				power_reset();
-				response_ctx->status = HTTP_204_NO_CONTENT;
-			} else {
-				response_ctx->status = HTTP_400_BAD_REQUEST;
-			}
+			response_ctx->status = HTTP_400_BAD_REQUEST;
 		}
-
-		in_buffer_len = 0; // Reset for next request
-		response_ctx->final_chunk = true;
 	}
+
+	response_ctx->final_chunk = true;
 
 	return 0;
 }
@@ -617,6 +1100,7 @@ static struct http_resource_detail_dynamic version_detail = {
 	.cb = redfish_version_handler,
 	.user_data = NULL,
 };
+
 // Root
 static struct http_resource_detail_dynamic root_detail = {
 	.common = {
@@ -627,8 +1111,68 @@ static struct http_resource_detail_dynamic root_detail = {
 	.user_data = NULL,
 };
 
-// Systems Collection Registration
-static struct http_resource_detail_dynamic systems_coll_detail = {
+// AccountService
+static struct http_resource_detail_dynamic account_service_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = account_service_handler,
+	.user_data = NULL,
+};
+
+// Accounts Collection
+static struct http_resource_detail_dynamic accounts_collection_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = accounts_collection_handler,
+	.user_data = NULL,
+};
+
+// Managers Collection
+static struct http_resource_detail_dynamic managers_collection_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = managers_collection_handler,
+	.user_data = NULL,
+};
+
+// Manager
+static struct http_resource_detail_dynamic manager_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = manager_handler,
+	.user_data = NULL,
+};
+
+// Ethernet Collection
+static struct http_resource_detail_dynamic ethernet_collection_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = ethernet_collection_handler,
+	.user_data = NULL,
+};
+
+// Ethernet
+static struct http_resource_detail_dynamic ethernet_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = ethernet_handler,
+	.user_data = NULL,
+};
+
+// Systems Collection
+static struct http_resource_detail_dynamic systems_collection_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
 		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
@@ -638,12 +1182,12 @@ static struct http_resource_detail_dynamic systems_coll_detail = {
 };
 
 // System
-static struct http_resource_detail_dynamic sys_detail = {
+static struct http_resource_detail_dynamic system_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
 		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
 	},
-	.cb = system_info_handler,
+	.cb = system_handler,
 	.user_data = NULL,
 };
 
@@ -657,31 +1201,75 @@ static struct http_resource_detail_dynamic action_detail = {
 	.user_data = NULL,
 };
 
-HTTP_RESOURCE_DEFINE(redfish_version, http_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash, http_service, "/redfish", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_root, http_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash, http_service, "/redfish/v1",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_systems_coll, http_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
-HTTP_RESOURCE_DEFINE(redfish_sys, http_service,
-		"/redfish/v1/Systems/system", &sys_detail);
+// Account
+static struct http_resource_detail_dynamic account_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+	},
+	.cb = account_handler,
+	.user_data = NULL,
+};
+
+// Don't forget HTTPS versions if CONFIG_APP_HTTPS is defined!
+
+HTTP_RESOURCE_DEFINE(redfish_version, http_service,
+		"/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash, http_service,
+		"/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root, http_service,
+		"/redfish/v1/", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash, http_service,
+		"/redfish/v1", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_account_service, http_service,
+		"/redfish/v1/AccountService", &account_service_detail);
+HTTP_RESOURCE_DEFINE(redfish_accounts_collection, http_service,
+		"/redfish/v1/AccountService/Accounts", &accounts_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_account, http_service,
+		"/redfish/v1/AccountService/Accounts/1", &account_detail);
+HTTP_RESOURCE_DEFINE(redfish_managers_collection, http_service,
+		"/redfish/v1/Managers", &managers_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_manager, http_service,
+		"/redfish/v1/Managers/bmc", &manager_detail);
+HTTP_RESOURCE_DEFINE(redfish_ethernet_collection, http_service,
+		"/redfish/v1/Managers/bmc/EthernetInterfaces", &ethernet_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_ethernet, http_service,
+		"/redfish/v1/Managers/bmc/EthernetInterfaces/eth0", &ethernet_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_collection, http_service,
+		"/redfish/v1/Systems", &systems_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_system, http_service,
+		"/redfish/v1/Systems/system", &system_detail);
 HTTP_RESOURCE_DEFINE(redfish_action, http_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
 
 #if defined(CONFIG_APP_HTTPS)
-HTTP_RESOURCE_DEFINE(redfish_version_https, https_service, "/redfish/", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, https_service, "/redfish", &version_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_https, https_service, "/redfish/v1/",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, https_service, "/redfish/v1",
-		&root_detail);
-HTTP_RESOURCE_DEFINE(redfish_systems_coll_https, https_service,
-		"/redfish/v1/Systems", &systems_coll_detail);
-HTTP_RESOURCE_DEFINE(redfish_sys_https, https_service,
-		"/redfish/v1/Systems/system", &sys_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_https, https_service,
+		"/redfish/", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_version_no_slash_https, https_service,
+		"/redfish", &version_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_https, https_service,
+		"/redfish/v1/", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_root_no_slash_https, https_service,
+		"/redfish/v1", &root_detail);
+HTTP_RESOURCE_DEFINE(redfish_account_service_https, https_service,
+		"/redfish/v1/AccountService", &account_service_detail);
+HTTP_RESOURCE_DEFINE(redfish_accounts_collection_https, https_service,
+		"/redfish/v1/AccountService/Accounts", &accounts_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_account_https, https_service,
+		"/redfish/v1/AccountService/Accounts/1", &account_detail);
+HTTP_RESOURCE_DEFINE(redfish_managers_collection_https, https_service,
+		"/redfish/v1/Managers", &managers_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_manager_https, https_service,
+		"/redfish/v1/Managers/bmc", &manager_detail);
+HTTP_RESOURCE_DEFINE(redfish_ethernet_collection_https, https_service,
+		"/redfish/v1/Managers/bmc/EthernetInterfaces", &ethernet_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_ethernet_https, https_service,
+		"/redfish/v1/Managers/bmc/EthernetInterfaces/eth0", &ethernet_detail);
+HTTP_RESOURCE_DEFINE(redfish_systems_collection_https, https_service,
+		"/redfish/v1/Systems", &systems_collection_detail);
+HTTP_RESOURCE_DEFINE(redfish_system_https, https_service,
+		"/redfish/v1/Systems/system", &system_detail);
 HTTP_RESOURCE_DEFINE(redfish_action_https, https_service,
 		"/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		&action_detail);
