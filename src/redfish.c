@@ -32,7 +32,7 @@ static char serial_number[] = "12345";
 /* This is racy because several requests could be concurrently processing */
 /* XXX: must fix and make these per-client */
 static char out_buffer[1024];
-static char in_buffer[128];
+static char in_buffer[512];
 static size_t in_buffer_len;
 
 void set_power_state(bool on)
@@ -172,6 +172,8 @@ struct redfish_account {
 static const struct json_obj_descr account_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
+	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING), 
 };
 
 /* DHCPv4 */
@@ -594,6 +596,58 @@ static int accounts_collection_handler(struct http_client_ctx *client, enum http
 	return 0;
 }
 
+static int account_handler_patch(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	struct redfish_account payload;
+	int ret;
+
+	// Accumulate data
+	if (request_ctx->data && request_ctx->data_len > 0) {
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
+		} else {
+			LOG_ERR("Payload too large");
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
+			return 0;
+		}
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	in_buffer[in_buffer_len] = '\0';
+
+	memset(&payload, 0, sizeof(payload));
+	ret = json_obj_parse(in_buffer, in_buffer_len,
+			account_descr,
+			ARRAY_SIZE(account_descr), &payload);
+	in_buffer_len = 0;
+
+	if (ret < 0) {
+		LOG_ERR("Bad JSON (err=%d)", ret);
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	if (payload.password) {
+		config_bmc_password_set(payload.password);
+		LOG_INF("Admin Password Updated");
+	}
+
+	response_ctx->status = HTTP_204_NO_CONTENT;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
 /* Account: GET /redfish/v1/AccountService/Account/1 */
 static int account_handler(struct http_client_ctx *client,
 			       enum http_transaction_status status,
@@ -613,9 +667,15 @@ static int account_handler(struct http_client_ctx *client,
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
+	if (client->method == HTTP_PATCH) {
+		return account_handler_patch(client, status, request_ctx,
+						response_ctx, user_data);
+	}
+
 	struct redfish_account account = {
 		.odata_id = "/redfish/v1/AccountService/Accounts/1",
 		.user_name = "admin",
+		.password = "",
 	};
 
 	int ret = json_obj_encode_buf(account_descr,
@@ -790,7 +850,81 @@ static int ethernet_collection_handler(struct http_client_ctx *client, enum http
 	return 0;
 }
 
-/* GET /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
+static int ethernet_handler_patch(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	struct redfish_ethernet_interface payload;
+	int ret;
+	bool poison_bool;
+
+	// Accumulate data
+	if (request_ctx->data && request_ctx->data_len > 0) {
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
+		} else {
+			LOG_ERR("Payload too large");
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
+			return 0;
+		}
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	in_buffer[in_buffer_len] = '\0';
+
+	memset(&payload, 0, sizeof(payload));
+	memset(&payload.dhcp_v4.dhcp_enabled, 0xe1, sizeof(bool)); /* poison */
+	payload.ipv4_static_count = -1;
+	ret = json_obj_parse(in_buffer, in_buffer_len,
+			ethernet_interface_descr,
+			ARRAY_SIZE(ethernet_interface_descr), &payload);
+	in_buffer_len = 0;
+
+	if (ret < 0) {
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	if (payload.host_name) {
+		ret = config_bmc_hostname_set(payload.host_name);
+		if (ret) {
+			LOG_ERR("Failed to set hostname (err=%d)", ret);
+			response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+	}
+
+	memset(&poison_bool, 0xe1, sizeof(poison_bool));
+	if (memcmp(&payload.dhcp_v4.dhcp_enabled, &poison_bool, sizeof(bool)))
+		config_bmc_use_dhcp4_set(payload.dhcp_v4.dhcp_enabled);
+
+	if (payload.ipv4_static_count != -1) {
+		/* If count is 0 then the address will be 0 (which clears the static IP) */
+		ret = config_bmc_default_ip4_set(payload.ipv4_static_addresses[0].address);
+		if (ret) {
+			LOG_ERR("Failed to set static IP address (err=%d)", ret);
+			response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+	}
+
+	response_ctx->status = HTTP_204_NO_CONTENT;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* GET|PATCH /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
 static int ethernet_handler(struct http_client_ctx *client, enum http_transaction_status status,
 			    const struct http_request_ctx *request_ctx,
 			    struct http_response_ctx *response_ctx, void *user_data)
@@ -803,6 +937,11 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
+
+	if (client->method == HTTP_PATCH) {
+		return ethernet_handler_patch(client, status, request_ctx,
+						response_ctx, user_data);
+	}
 
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
@@ -946,7 +1085,71 @@ static int systems_collection_handler(struct http_client_ctx *client,
 	return 0;
 }
 
-/* System Info: GET /redfish/v1/Systems/system */
+static int system_handler_patch(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	struct redfish_computer_system payload;
+	int ret;
+
+	// Accumulate data
+	if (request_ctx->data && request_ctx->data_len > 0) {
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
+		} else {
+			LOG_ERR("Payload too large");
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
+			return 0;
+		}
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	in_buffer[in_buffer_len] = '\0';
+
+	memset(&payload, 0, sizeof(payload));
+	ret = json_obj_parse(in_buffer, in_buffer_len,
+			computer_system_descr,
+			ARRAY_SIZE(computer_system_descr), &payload);
+	in_buffer_len = 0;
+
+	if (ret < 0) {
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	if (payload.power_restore_policy) {
+		if (!strcmp(payload.power_restore_policy, "AlwaysOn")) {
+			ret = config_host_auto_poweron_set(true);
+		} else if (!strcmp(payload.power_restore_policy, "AlwaysOff")) {
+			ret = config_host_auto_poweron_set(false);
+		} else {
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+		if (ret) {
+			LOG_ERR("Failed to set host auto-poweron(err=%d)", ret);
+			response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+	}
+
+	response_ctx->status = HTTP_204_NO_CONTENT;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* System Info: GET|PATCH /redfish/v1/Systems/system */
 static int system_handler(struct http_client_ctx *client,
 			  enum http_transaction_status status,
 			  const struct http_request_ctx *request_ctx,
@@ -961,6 +1164,12 @@ static int system_handler(struct http_client_ctx *client,
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
+
+	if (client->method == HTTP_PATCH) {
+		return system_handler_patch(client, status, request_ctx,
+					    response_ctx, user_data);
+	}
+
 
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
@@ -1145,7 +1354,7 @@ static struct http_resource_detail_dynamic managers_collection_detail = {
 static struct http_resource_detail_dynamic manager_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
 	},
 	.cb = manager_handler,
 	.user_data = NULL,
@@ -1165,7 +1374,7 @@ static struct http_resource_detail_dynamic ethernet_collection_detail = {
 static struct http_resource_detail_dynamic ethernet_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
 	},
 	.cb = ethernet_handler,
 	.user_data = NULL,
@@ -1185,7 +1394,7 @@ static struct http_resource_detail_dynamic systems_collection_detail = {
 static struct http_resource_detail_dynamic system_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
 	},
 	.cb = system_handler,
 	.user_data = NULL,
@@ -1205,7 +1414,7 @@ static struct http_resource_detail_dynamic action_detail = {
 static struct http_resource_detail_dynamic account_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
 	},
 	.cb = account_handler,
 	.user_data = NULL,
