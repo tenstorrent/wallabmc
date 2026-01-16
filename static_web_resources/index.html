@@ -333,7 +333,7 @@
 					<div class="info-item"><label>Manufacturer</label><span class="data-value" id="sys-manufacturer">Loading...</span></div>
 					<div class="info-item"><label>Model</label><span class="data-value" id="sys-model">Loading...</span></div>
 					<div class="info-item"><label>Serial</label><span class="data-value" id="sys-serial">Loading...</span></div>
-					<div class="info-item"><label>CPU</label><span class="data-value" id="sys-cpu-description">Loading...</span></div>
+					<div class="info-item"><label>CPU</label><span class="data-value" id="sys-cpu-model">Loading...</span></div>
 					<div class="info-item"><label>CPU Count</label><span class="data-value" id="sys-cpu">Loading...</span></div>
 					<div class="info-item"><label>Memory</label><span class="data-value" id="sys-memory">Loading...</span></div>
 				</div>
@@ -604,7 +604,7 @@
 			setText('sys-model', sysData.Model);
 			setText('sys-memory', sysData.MemorySummary ? `${sysData.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
 			setText('sys-cpu', sysData.ProcessorSummary ? sysData.ProcessorSummary.Count : 'N/A');
-			setText('sys-cpu-description', sysData.ProcessorSummary ? sysData.ProcessorSummary.Description : 'N/A');
+			setText('sys-cpu-model', sysData.ProcessorSummary ? sysData.ProcessorSummary.Model : 'N/A');
 
 			const pstate = document.getElementById('power-state-badge');
 			setText('power-state-badge', sysData.PowerState);

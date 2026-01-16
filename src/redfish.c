@@ -194,11 +194,19 @@ static const struct json_obj_descr account_service_descr[] = {
 /* Account */
 struct redfish_account {
 	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *role_id;
+	const char *name;
 	const char *user_name;
 	const char *password; // Write-only
 };
 static const struct json_obj_descr account_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "RoleId", role_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Name", name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
 	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING),
@@ -229,6 +237,9 @@ static const struct json_obj_descr ipv4_addr_descr[] = {
 /* EthInterface */
 struct redfish_ethernet_interface {
 	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
 	const char *host_name;
 	struct redfish_dhcp_v4 dhcp_v4;
 	struct redfish_ipv4_addr ipv4_addresses[1];
@@ -238,6 +249,9 @@ struct redfish_ethernet_interface {
 };
 static const struct json_obj_descr ethernet_interface_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Name", name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "HostName", host_name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_ethernet_interface, "DHCPv4", dhcp_v4, dhcp_v4_descr),
 	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses,
@@ -289,14 +303,15 @@ static const struct json_obj_descr actions_descr[] = {
 
 /* System Info: ProcessorSummary nested object */
 struct redfish_processor_summary {
+	const char *odata_type;
 	int32_t count;
-	const char *description;
+	const char *model;
 };
 static const struct json_obj_descr processor_summary_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
 				  count, JSON_TOK_NUMBER),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Description",
-				  description, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Model",
+				  model, JSON_TOK_STRING),
 };
 
 /* System Info: MemorySummary nested object */
@@ -369,7 +384,8 @@ static int validate_auth(struct http_client_ctx *client)
 	const char *prefix = "Basic ";
 
 	for (unsigned int i = 0; i < header_count; i++) {
-		if (!strcmp(headers[i].name, "authorization")) {
+		if (!strcmp(headers[i].name, "authorization") ||
+		    !strcmp(headers[i].name, "Authorization")) {
 			auth_header = headers[i].value;
 			break;
 		}
@@ -820,8 +836,17 @@ static int account_handler(struct http_client_ctx *client,
 
 	struct redfish_account account = {
 		.odata_id = "/redfish/v1/AccountService/Accounts/1",
+		.odata_type = "#ManagerAccount.v1_9_0.ManagerAccount",
+		.id = "1",
+		.name = "Administrator",
+		.role_id = "Administrator",
 		.user_name = "admin",
-		.password = "",
+		.password = NULL,
+		/*
+		 * Zephyr's JSON parser turns NULL password into an empty string
+		 * ("") instead of null. That causes redfish validation to complain,
+		 * but it shouldn't be a big deal.
+		 */
 	};
 
 	int ret = json_obj_encode_buf(account_descr,
@@ -1098,6 +1123,9 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 
 	struct redfish_ethernet_interface ethernet_interface = {
 		.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
+		.odata_type = "#EthernetInterface.v1_5_0.EthernetInterface",
+		.id = "eth0",
+		.name = "BMC Ethernet Interface",
 		.host_name = net_hostname_get(),
 		.dhcp_v4 = { .dhcp_enabled = config_bmc_use_dhcp4(), },
 		.ipv4_count = 0,
@@ -1335,8 +1363,9 @@ static int system_handler(struct http_client_ctx *client,
 		.manufacturer = "Tenstorrent",
 		.model = "Atlantis",
 		.processor_summary = {
+			.odata_type = "#ProcessorSummary.v1_4_0.ProcessorSummary",
 			.count = 8,
-			.description = "Tenstorrent Ascalon X™",
+			.model = "Tenstorrent Ascalon X™",
 		},
 		.memory_summary = {
 			.total_system_GiB = 32,
