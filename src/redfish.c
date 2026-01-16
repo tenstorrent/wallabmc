@@ -328,10 +328,6 @@ static const struct json_obj_descr computer_system_descr[] = {
 
 /*** Redfish HTTP handlers ***/
 
-static const struct http_header json_header[] = {
-	{.name = "content-type", .value = "application/json"}
-};
-
 /* "Basic" (not session based) authentication, uses HTTP Authorization header */
 HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_authorization, "authorization");
 HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_x_auth_code, "x-auth-code");
@@ -390,6 +386,51 @@ static int validate_auth(struct http_client_ctx *client)
 	return -1;
 }
 
+static int validate_and_set_headers(struct http_client_ctx *client,
+				struct http_response_ctx *ctx,
+				uint32_t supported_methods)
+{
+	if (!(BIT(client->method) & supported_methods)) {
+		ctx->status = HTTP_405_METHOD_NOT_ALLOWED;
+		if (supported_methods == (BIT(HTTP_GET))) {
+			static const struct http_header headers[] = {
+				{ .name = "allow", .value = "GET" },
+			};
+			ctx->headers = headers;
+			ctx->header_count = ARRAY_SIZE(headers);
+		} else if (supported_methods == (BIT(HTTP_POST))) {
+			static const struct http_header headers[] = {
+				{ .name = "allow", .value = "POST" },
+			};
+			ctx->headers = headers;
+			ctx->header_count = ARRAY_SIZE(headers);
+		} else if (supported_methods == (BIT(HTTP_GET) | BIT(HTTP_PATCH))) {
+			static const struct http_header headers[] = {
+				{ .name = "allow", .value = "GET, PATCH" },
+			};
+			ctx->headers = headers;
+			ctx->header_count = ARRAY_SIZE(headers);
+		} else {
+			LOG_ERR("Unsupported supported methods!");
+		}
+		ctx->final_chunk = true;
+		ctx->body = NULL;
+		ctx->body_len = 0;
+		return -1;
+	}
+
+	if (client->method == HTTP_GET) {
+		static const struct http_header headers[] = {
+			{ .name = "content-type", .value = "application/json" },
+			{ .name = "cache-control", .value = "no-cache" },
+		};
+		ctx->headers = headers;
+		ctx->header_count = ARRAY_SIZE(headers);
+	}
+
+	return 0;
+}
+
 /*
  * XXX: Zephyr could provide a send_http1_401 response to send a
  * canonical 401 header, but this still seems to work.
@@ -397,6 +438,7 @@ static int validate_auth(struct http_client_ctx *client)
 static void set_unauth_response(struct http_client_ctx *client,
 				struct http_response_ctx *ctx)
 {
+	/* XXX: should this also include allow header? */
 	static struct http_header extra_headers[] = {
 		{ .name = "www-authenticate", .value = "Basic realm=\"BMC\"" },
 	};
@@ -440,6 +482,9 @@ static int redfish_version_handler(struct http_client_ctx *client,
 		.v1 = "/redfish/v1/"
 	};
 
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	/* Must not require auth */
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
@@ -460,8 +505,6 @@ static int redfish_version_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -493,6 +536,9 @@ static int service_root_handler(struct http_client_ctx *client,
 		},
 	};
 
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	/* Must not require auth */
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
@@ -513,8 +559,6 @@ static int service_root_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -535,6 +579,9 @@ static int account_service_handler(struct http_client_ctx *client, enum http_tra
 			.odata_id = "/redfish/v1/AccountService/Accounts",
 		},
 	};
+
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
@@ -560,8 +607,6 @@ static int account_service_handler(struct http_client_ctx *client, enum http_tra
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -573,6 +618,9 @@ static int accounts_collection_handler(struct http_client_ctx *client, enum http
 				       const struct http_request_ctx *request_ctx,
 				       struct http_response_ctx *response_ctx, void *user_data)
 {
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -610,8 +658,6 @@ static int accounts_collection_handler(struct http_client_ctx *client, enum http
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -670,13 +716,16 @@ static int account_handler_patch(struct http_client_ctx *client,
 	return 0;
 }
 
-/* Account: GET /redfish/v1/AccountService/Account/1 */
+/* Account: GET|PATCH /redfish/v1/AccountService/Account/1 */
 static int account_handler(struct http_client_ctx *client,
 			       enum http_transaction_status status,
 			       const struct http_request_ctx *request_ctx,
 			       struct http_response_ctx *response_ctx,
 			       void *user_data)
 {
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)|BIT(HTTP_PATCH)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -712,8 +761,6 @@ static int account_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -740,6 +787,9 @@ static int managers_collection_handler(struct http_client_ctx *client,
 		.members_len = 1
 	};
 
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -764,8 +814,6 @@ static int managers_collection_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -779,6 +827,9 @@ static int manager_handler(struct http_client_ctx *client,
 			       struct http_response_ctx *response_ctx,
 			       void *user_data)
 {
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -814,8 +865,6 @@ static int manager_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -839,6 +888,9 @@ static int ethernet_collection_handler(struct http_client_ctx *client, enum http
 		},
 		.members_len = 1
 	};
+
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
@@ -864,8 +916,6 @@ static int ethernet_collection_handler(struct http_client_ctx *client, enum http
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -951,6 +1001,9 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 			    const struct http_request_ctx *request_ctx,
 			    struct http_response_ctx *response_ctx, void *user_data)
 {
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET) | BIT(HTTP_PATCH)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -1047,8 +1100,6 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -1075,6 +1126,9 @@ static int systems_collection_handler(struct http_client_ctx *client,
 		.members_len = 1
 	};
 
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -1099,8 +1153,6 @@ static int systems_collection_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -1178,6 +1230,9 @@ static int system_handler(struct http_client_ctx *client,
 			  struct http_response_ctx *response_ctx,
 			  void *user_data)
 {
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET) | BIT(HTTP_PATCH)) < 0)
+		return 0;
+
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
 		set_unauth_response(client, response_ctx);
@@ -1239,8 +1294,6 @@ static int system_handler(struct http_client_ctx *client,
 
 	response_ctx->body = (uint8_t *)out_buffer;
 	response_ctx->body_len = strlen(out_buffer);
-	response_ctx->headers = json_header;
-	response_ctx->header_count = ARRAY_SIZE(json_header);
 	response_ctx->status = HTTP_200_OK;
 	response_ctx->final_chunk = true;
 
@@ -1256,6 +1309,9 @@ static int system_reset_handler(struct http_client_ctx *client,
 {
 	struct redfish_reset_payload payload;
 	int ret;
+
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_POST)) < 0)
+		return 0;
 
 	if (validate_auth(client) < 0) {
 		LOG_ERR("Failed to authenticate");
@@ -1326,7 +1382,7 @@ static int system_reset_handler(struct http_client_ctx *client,
 static struct http_resource_detail_dynamic version_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = redfish_version_handler,
 	.user_data = NULL,
@@ -1336,7 +1392,7 @@ static struct http_resource_detail_dynamic version_detail = {
 static struct http_resource_detail_dynamic root_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = service_root_handler,
 	.user_data = NULL,
@@ -1346,7 +1402,7 @@ static struct http_resource_detail_dynamic root_detail = {
 static struct http_resource_detail_dynamic account_service_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = account_service_handler,
 	.user_data = NULL,
@@ -1356,7 +1412,7 @@ static struct http_resource_detail_dynamic account_service_detail = {
 static struct http_resource_detail_dynamic accounts_collection_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = accounts_collection_handler,
 	.user_data = NULL,
@@ -1366,7 +1422,7 @@ static struct http_resource_detail_dynamic accounts_collection_detail = {
 static struct http_resource_detail_dynamic managers_collection_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = managers_collection_handler,
 	.user_data = NULL,
@@ -1376,7 +1432,7 @@ static struct http_resource_detail_dynamic managers_collection_detail = {
 static struct http_resource_detail_dynamic manager_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = manager_handler,
 	.user_data = NULL,
@@ -1386,7 +1442,7 @@ static struct http_resource_detail_dynamic manager_detail = {
 static struct http_resource_detail_dynamic ethernet_collection_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = ethernet_collection_handler,
 	.user_data = NULL,
@@ -1396,7 +1452,7 @@ static struct http_resource_detail_dynamic ethernet_collection_detail = {
 static struct http_resource_detail_dynamic ethernet_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = ethernet_handler,
 	.user_data = NULL,
@@ -1406,7 +1462,7 @@ static struct http_resource_detail_dynamic ethernet_detail = {
 static struct http_resource_detail_dynamic systems_collection_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = systems_collection_handler,
 	.user_data = NULL,
@@ -1416,7 +1472,7 @@ static struct http_resource_detail_dynamic systems_collection_detail = {
 static struct http_resource_detail_dynamic system_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = system_handler,
 	.user_data = NULL,
@@ -1426,7 +1482,7 @@ static struct http_resource_detail_dynamic system_detail = {
 static struct http_resource_detail_dynamic action_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_POST),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = system_reset_handler,
 	.user_data = NULL,
@@ -1436,7 +1492,7 @@ static struct http_resource_detail_dynamic action_detail = {
 static struct http_resource_detail_dynamic account_detail = {
 	.common = {
 		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
-		.bitmask_of_supported_http_methods = BIT(HTTP_GET) | BIT(HTTP_PATCH),
+		.bitmask_of_supported_http_methods = -1U,
 	},
 	.cb = account_handler,
 	.user_data = NULL,
