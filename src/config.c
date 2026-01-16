@@ -59,9 +59,6 @@ BUILD_ASSERT(sizeof(struct config_data) <= 64);
 
 static struct config_data config_data;
 
-/* Config is updated but not saved to flash */
-static bool config_dirty = false;
-
 uint32_t config_bmc_default_ip4(void)
 {
 	return config_data.bmc_default_ip4;
@@ -162,6 +159,9 @@ static int write_config(void)
 	size_t copied = 0;
 	int rc;
 
+	if (!fs_enabled())
+		return 0;
+
 	fs_file_t_init(&config_file);
 
 	if (!config_exists()) {
@@ -208,7 +208,11 @@ int config_bmc_hostname_set(const char *hostname)
 
 	strncpy(config_data.bmc_hostname, hostname, MAX_HOSTNAME_LEN);
 
-	config_dirty = true;
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -279,7 +283,11 @@ int config_bmc_default_ip4_set(const char *str)
 		return rc;
 	}
 
-	config_dirty = true;
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -312,6 +320,8 @@ static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char 
 
 int config_bmc_use_dhcp4_set(bool use)
 {
+	int rc;
+
 	if (use) {
 		if (config_data.bmc_use_dhcp4 == 1)
 			return 0;
@@ -324,7 +334,11 @@ int config_bmc_use_dhcp4_set(bool use)
 		stop_dhcp4();
 	}
 
-	config_dirty = true;
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -358,8 +372,15 @@ static int cmd_config_bmc_dhcp4(const struct shell *sh, size_t argc, char **argv
 
 int config_bmc_password_set(const char *password)
 {
+	int rc;
+
 	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
-	config_dirty = true;
+
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -393,6 +414,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
 
 int config_host_auto_poweron_set(bool on)
 {
+	int rc;
+
 	if (on) {
 		if (config_data.host_auto_poweron == 1)
 			return 0;
@@ -403,7 +426,11 @@ int config_host_auto_poweron_set(bool on)
 		config_data.host_auto_poweron = 0;
 	}
 
-	config_dirty = true;
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
 
 	return 0;
 }
@@ -429,8 +456,6 @@ static int cmd_config_host_auto_poweron(const struct shell *sh, size_t argc, cha
 		shell_info(sh, "Host auto poweron disabled");
 	}
 
-	config_dirty = true;
-
 	return 0;
 }
 
@@ -451,53 +476,12 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
-	if (config_dirty) {
-		if (fs_enabled())
-			shell_print(sh, "Configuration changes have not been saved");
-		else
-			shell_print(sh, "Configuration changes have been made");
-	}
 
 	return 0;
 }
-
-#ifdef CONFIG_PERSISTENT_STORAGE
-static int cmd_config_save(const struct shell *sh, size_t argc, char **argv)
-{
-	int rc;
-
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
-
-	if (!fs_enabled()) {
-		shell_info(sh, "Storage not available, skipping save");
-		return 0;
-	}
-
-	if (!config_dirty) {
-		shell_info(sh, "Configuration is unchanged, skipping save");
-		return 0;
-	}
-
-	rc = write_config();
-	if (rc < 0) {
-		shell_error(sh, "Configuration could not be saved (err=%d)", rc);
-		return rc;
-	}
-
-	config_dirty = false;
-
-	shell_info(sh, "Configuration saved to flash");
-
-	return 0;
-}
-#endif
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 	SHELL_CMD(show,	NULL, "Show configuration.", &cmd_config_show),
-#ifdef CONFIG_PERSISTENT_STORAGE
-	SHELL_CMD(save,	NULL, "Save configuration.", &cmd_config_save),
-#endif
 	SHELL_CMD(bmc,	&sub_config_bmc_cmds, "BMC configuration commands.", NULL),
 	SHELL_CMD(host,	&sub_config_host_cmds, "Host configuration commands.", NULL),
 	SHELL_SUBCMD_SET_END
