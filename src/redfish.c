@@ -262,6 +262,28 @@ static const struct json_obj_descr ethernet_interface_descr[] = {
 		       1, ipv4_static_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
 };
 
+struct redfish_ntp {
+	bool protocol_enabled;
+	const char *ntp_servers[1];
+	size_t ntp_servers_count;
+};
+static const struct json_obj_descr ntp_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ntp , "ProtocolEnabled", protocol_enabled, JSON_TOK_TRUE),
+	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_ntp , "NTPServers", ntp_servers, 1, ntp_servers_count, JSON_TOK_STRING),
+};
+
+/* NetworkProtocol */
+struct redfish_network_protocol {
+	const char *odata_type;
+	const char *id;
+	struct redfish_ntp ntp;
+};
+static const struct json_obj_descr network_protocol_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_network_protocol, "NTP", ntp, ntp_descr),
+};
+
 /* Manager */
 struct redfish_manager {
 	const char *odata_id;
@@ -1287,6 +1309,126 @@ static int ethernet_handler(struct http_client_ctx *client, enum http_transactio
 	return 0;
 }
 
+static int network_protocol_handler_patch(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	struct redfish_network_protocol payload;
+	int ret;
+	bool poison_bool;
+
+	// Accumulate data
+	if (request_ctx->data && request_ctx->data_len > 0) {
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
+		} else {
+			LOG_ERR("Payload too large");
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
+			return 0;
+		}
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	in_buffer[in_buffer_len] = '\0';
+
+	memset(&payload, 0, sizeof(payload));
+	memset(&payload.ntp.protocol_enabled, 0xe1, sizeof(bool)); /* poison */
+	payload.ntp.ntp_servers_count = -1;
+	ret = json_obj_parse(in_buffer, in_buffer_len,
+			network_protocol_descr,
+			ARRAY_SIZE(network_protocol_descr), &payload);
+	in_buffer_len = 0;
+
+	if (ret < 0) {
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	if (payload.ntp.ntp_servers_count != -1) {
+		/* If count is 0 then the address will be 0 (which clears the static IP) */
+		ret = config_bmc_ntp_server_set(payload.ntp.ntp_servers[0]);
+		if (ret) {
+			LOG_ERR("Failed to set NTP server address (err=%d)", ret);
+			response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+	}
+
+	memset(&poison_bool, 0xe1, sizeof(poison_bool));
+	if (memcmp(&payload.ntp.protocol_enabled, &poison_bool, sizeof(bool)))
+		config_bmc_use_ntp_set(payload.ntp.protocol_enabled);
+
+	response_ctx->status = HTTP_204_NO_CONTENT;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* GET|PATCH /redfish/v1/Managers/bmc/NetworkProtocol */
+static int network_protocol_handler(struct http_client_ctx *client, enum http_transaction_status status,
+			    const struct http_request_ctx *request_ctx,
+			    struct http_response_ctx *response_ctx, void *user_data)
+{
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET) | BIT(HTTP_PATCH)) < 0)
+		return 0;
+
+	if (validate_auth(client) < 0) {
+		LOG_ERR("Failed to authenticate");
+		set_unauth_response(client, response_ctx);
+		return 0;
+	}
+
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+		return 0;
+
+	if (client->method == HTTP_PATCH) {
+		return network_protocol_handler_patch(client, status, request_ctx,
+						response_ctx, user_data);
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	struct redfish_network_protocol network_protocol = {
+		.odata_type = "#ManagerNetworkProtocol.v1_9_0.ManagerNetworkProtocol",
+		.id = "NetworkProtocol",
+		.ntp = {
+			.protocol_enabled = config_bmc_use_ntp(),
+		},
+	};
+
+	if (config_bmc_ntp_server()) {
+		network_protocol.ntp.ntp_servers[0] = config_bmc_ntp_server();
+		network_protocol.ntp.ntp_servers_count = 1;
+	}
+
+	int ret = json_obj_encode_buf(network_protocol_descr,
+				       ARRAY_SIZE(network_protocol_descr),
+				       &network_protocol, out_buffer, sizeof(out_buffer));
+	if (ret < 0) {
+		LOG_ERR("Failed to encode computer system: %d", ret);
+		response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	response_ctx->body = (uint8_t *)out_buffer;
+	response_ctx->body_len = strlen(out_buffer);
+	response_ctx->status = HTTP_200_OK;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
 /* Systems Collection: GET /redfish/v1/Systems */
 static int systems_collection_handler(struct http_client_ctx *client,
 				      enum http_transaction_status status,
@@ -1650,6 +1792,16 @@ static struct http_resource_detail_dynamic ethernet_detail = {
 	.user_data = NULL,
 };
 
+// NetworkProtocol
+static struct http_resource_detail_dynamic network_protocol_detail = {
+	.common = {
+		.type = HTTP_RESOURCE_TYPE_DYNAMIC,
+		.bitmask_of_supported_http_methods = -1U,
+	},
+	.cb = network_protocol_handler,
+	.user_data = NULL,
+};
+
 // Systems Collection
 static struct http_resource_detail_dynamic systems_collection_detail = {
 	.common = {
@@ -1733,6 +1885,8 @@ HTTP_RESOURCE_DEFINE(redfish_ethernet_collection, http_service,
 		"/redfish/v1/Managers/bmc/EthernetInterfaces", &ethernet_collection_detail);
 HTTP_RESOURCE_DEFINE(redfish_ethernet, http_service,
 		"/redfish/v1/Managers/bmc/EthernetInterfaces/eth0", &ethernet_detail);
+HTTP_RESOURCE_DEFINE(redfish_network_protocol, http_service,
+		"/redfish/v1/Managers/bmc/NetworkProtocol", &network_protocol_detail);
 HTTP_RESOURCE_DEFINE(redfish_systems_collection, http_service,
 		"/redfish/v1/Systems", &systems_collection_detail);
 HTTP_RESOURCE_DEFINE(redfish_system, http_service,
@@ -1768,6 +1922,8 @@ HTTP_RESOURCE_DEFINE(redfish_ethernet_collection_https, https_service,
 		"/redfish/v1/Managers/bmc/EthernetInterfaces", &ethernet_collection_detail);
 HTTP_RESOURCE_DEFINE(redfish_ethernet_https, https_service,
 		"/redfish/v1/Managers/bmc/EthernetInterfaces/eth0", &ethernet_detail);
+HTTP_RESOURCE_DEFINE(redfish_network_protocol_https, https_service,
+		"/redfish/v1/Managers/bmc/NetworkProtocol", &network_protocol_detail);
 HTTP_RESOURCE_DEFINE(redfish_systems_collection_https, https_service,
 		"/redfish/v1/Systems", &systems_collection_detail);
 HTTP_RESOURCE_DEFINE(redfish_system_https, https_service,
