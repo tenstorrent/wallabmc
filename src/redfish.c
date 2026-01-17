@@ -19,11 +19,13 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/base64.h>
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "config.h"
 #include "power.h"
+#include "rtc.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -267,6 +269,7 @@ struct redfish_manager {
 	const char *id;
 	const char *name;
 	const char *uuid;
+	const char *date_time;
 	struct redfish_link ethernet_interfaces;
 };
 static const struct json_obj_descr manager_descr[] = {
@@ -275,6 +278,7 @@ static const struct json_obj_descr manager_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Id", id, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Name", name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "UUID", uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "DateTime", date_time, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "EthernetInterfaces", ethernet_interfaces, link_descr),
 };
 
@@ -920,14 +924,82 @@ static int managers_collection_handler(struct http_client_ctx *client,
 	return 0;
 }
 
-/* Manager Info: GET /redfish/v1/Managers/bmc */
+static const char *get_iso_time(void)
+{
+	static char str[30];
+	struct timespec ts;
+	struct tm *tm_info;
+
+	clock_gettime(CLOCK_REALTIME, &ts);
+	tm_info = gmtime(&ts.tv_sec);
+	strftime(str, sizeof(str), "%Y-%m-%dT%H:%M:%SZ", tm_info);
+
+	return str;
+}
+
+static int manager_handler_patch(struct http_client_ctx *client,
+			       enum http_transaction_status status,
+			       const struct http_request_ctx *request_ctx,
+			       struct http_response_ctx *response_ctx,
+			       void *user_data)
+{
+	struct redfish_manager payload;
+	int ret;
+
+	// Accumulate data
+	if (request_ctx->data && request_ctx->data_len > 0) {
+		if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
+			memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
+			in_buffer_len += request_ctx->data_len;
+		} else {
+			LOG_ERR("Payload too large");
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
+			in_buffer_len = 0;
+			return 0;
+		}
+	}
+
+	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		return 0;
+
+	in_buffer[in_buffer_len] = '\0';
+
+	ret = json_obj_parse(in_buffer, in_buffer_len,
+			manager_descr,
+			ARRAY_SIZE(manager_descr), &payload);
+	in_buffer_len = 0;
+
+	if (ret < 0) {
+		response_ctx->status = HTTP_400_BAD_REQUEST;
+		response_ctx->final_chunk = true;
+		return 0;
+	}
+
+	if (payload.date_time) {
+		ret = time_set_from_iso_str(payload.date_time);
+		if (ret) {
+			LOG_ERR("Failed to set date/time (err=%d)", ret);
+			response_ctx->status = HTTP_500_INTERNAL_SERVER_ERROR;
+			response_ctx->final_chunk = true;
+			return 0;
+		}
+	}
+
+	response_ctx->status = HTTP_204_NO_CONTENT;
+	response_ctx->final_chunk = true;
+
+	return 0;
+}
+
+/* Manager Info: GET|PATCH /redfish/v1/Managers/bmc */
 static int manager_handler(struct http_client_ctx *client,
 			       enum http_transaction_status status,
 			       const struct http_request_ctx *request_ctx,
 			       struct http_response_ctx *response_ctx,
 			       void *user_data)
 {
-	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET)) < 0)
+	if (validate_and_set_headers(client, response_ctx, BIT(HTTP_GET) | BIT(HTTP_PATCH)) < 0)
 		return 0;
 
 	if (validate_auth(client) < 0) {
@@ -939,6 +1011,11 @@ static int manager_handler(struct http_client_ctx *client,
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
 		return 0;
 
+	if (client->method == HTTP_PATCH) {
+		return manager_handler_patch(client, status, request_ctx,
+						response_ctx, user_data);
+	}
+
 	if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 		return 0;
 
@@ -948,6 +1025,7 @@ static int manager_handler(struct http_client_ctx *client,
 		.id = "bmc",
 		.uuid = "58893887-8974-2487-2389-389233423423",
 		.name = "WallaBMC",
+		.date_time = get_iso_time(),
 		.ethernet_interfaces = {
 			.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
 		},
