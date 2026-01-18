@@ -384,6 +384,15 @@
 					</div>
 				</div>
 
+				<h3>Time</h3>
+				<div class="grid-4-col">
+					<div class="info-item"><label>Current Time</label><span class="data-value" id="bmc-date-time">Loading...</span></div>
+					<div class="info-item">
+					<div class="info-item">
+						<button onclick="syncTimeToBrowser()">Sync to browser</button>
+					</div>
+				</div>
+
 				<h3>Network</h3>
 				<div class="grid-4-col">
 					<div class="info-item"><label>IP Address</label><span class="data-value" id="bmc-ip-address">Loading...</span></div>
@@ -613,6 +622,15 @@
 			setText('bmc-uuid', bmcData.UUID);
 			setText('bmc-name', bmcData.Name);
 
+			const bmc_date = new Date(bmcData.DateTime);
+			setText('bmc-date-time', bmc_date.toLocaleString(undefined,
+					{ year: 'numeric',
+					  month: 'short',
+					  day: 'numeric',
+					  hour: '2-digit',
+					  minute: '2-digit',
+					  hour12: false } ));
+
 			if (ethData) {
 				if (ethData.IPv4Addresses && ethData.IPv4Addresses.length > 0) {
 					setText('bmc-ip-address', ethData.IPv4Addresses[0].Address);
@@ -713,6 +731,24 @@
 
 				const actionUri = `${systemIdPath}/Actions/ComputerSystem.Reset`;
 				await redfishCall(actionUri, 'POST', { "ResetType": resetType });
+
+				refreshTimer = setTimeout(refreshSystemData, 3000);
+			} catch (err) {
+				alert(`Failed: ${err.message}`);
+			}
+		}
+
+		async function syncTimeToBrowser(resetType) {
+			try {
+				const new_date = new Date();
+				new_date.toISOString();
+
+				if (refreshTimer)
+					clearTimeout(refreshTimer);
+				refreshTimer = null;
+
+				bmcData = await redfishCall(managerIdPath);
+				await redfishCall(managerIdPath, 'PATCH', { "DateTime": new_date });
 
 				refreshTimer = setTimeout(refreshSystemData, 3000);
 			} catch (err) {
