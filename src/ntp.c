@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(wallabmc_ntp, LOG_LEVEL_DBG);
 
 #include "ntp.h"
 #include "rtc.h"
+#include "config.h"
 
 static int sntp_set_clocks(struct sntp_time *ts)
 {
@@ -80,10 +81,10 @@ static int do_sntp(int family)
 	struct sockaddr addr;
 	socklen_t addrlen;
 	int rv;
+	const char *server = config_bmc_ntp_server();
 
 	/* Get SNTP server */
-	rv = dns_query(NTP_SERVER_ADDR, NTP_SERVER_PORT,
-				   family, SOCK_DGRAM, &addr, &addrlen);
+	rv = dns_query(server, NTP_SERVER_PORT, family, SOCK_DGRAM, &addr, &addrlen);
 	if (rv != 0) {
 		LOG_ERR("Failed to lookup %s SNTP server (err=%d)", family_str, rv);
 		return rv;
@@ -179,6 +180,9 @@ int stop_ntp(void)
 
 int ntp_init(void)
 {
-	return start_ntp();
+	if (config_bmc_use_ntp())
+		return start_ntp();
+
+	return 0;
 }
 

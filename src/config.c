@@ -17,6 +17,7 @@ LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 #include "main.h"
 #include "net.h"
 #include "dhcp.h"
+#include "ntp.h"
 #include "fs.h"
 
 static const char CONFIG_FILE[] = "/lfs/config_data.bin";
@@ -24,6 +25,8 @@ static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 #define MAX_HOSTNAME_LEN 15
 
 #define MAX_PW_LEN 15
+
+#define MAX_NTP_SERVER_LEN 15
 
 /*
  * Incrementing this allows struct config_data to be modified
@@ -46,6 +49,8 @@ struct config_data {
 	uint8_t bmc_use_dhcp4;
 	uint8_t host_auto_poweron;
 	char bmc_admin_password[MAX_PW_LEN + 1]; /* NULL terminated */
+	uint8_t bmc_use_ntp;
+	char bmc_ntp_server[MAX_NTP_SERVER_LEN + 1]; /* NULL terminated */
 } __packed;
 
 /*
@@ -77,6 +82,16 @@ bool config_host_auto_poweron(void)
 const char *config_bmc_admin_password(void)
 {
 	return config_data.bmc_admin_password;
+}
+
+bool config_bmc_use_ntp(void)
+{
+	return config_data.bmc_use_ntp;
+}
+
+const char *config_bmc_ntp_server(void)
+{
+	return config_data.bmc_ntp_server;
 }
 
 static bool config_exists(void)
@@ -370,6 +385,104 @@ static int cmd_config_bmc_dhcp4(const struct shell *sh, size_t argc, char **argv
 	return 0;
 }
 
+int config_bmc_use_ntp_set(bool use)
+{
+	int rc;
+
+	if (use) {
+		if (config_data.bmc_use_ntp == 1)
+			return 0;
+		config_data.bmc_use_ntp = 1;
+		start_ntp();
+	} else {
+		if (config_data.bmc_use_ntp == 0)
+			return 0;
+		config_data.bmc_use_ntp = 0;
+		stop_ntp();
+	}
+
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_NTP				\
+	"BMC NTP time sync enabled\n"			\
+	"Usage: bmc ntp <enable|disable>"
+
+static int cmd_config_bmc_ntp(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	if (!strcmp(argv[1], "enable")) {
+		config_bmc_use_ntp_set(true);
+		shell_info(sh, "BMC NTP enabled");
+	} else if (!strcmp(argv[1], "disable")) {
+		config_bmc_use_ntp_set(false);
+		shell_info(sh, "BMC NTP disabled");
+	} else {
+		shell_error(sh, "bmc dhcpv4: unknown argument %s", argv[1]);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+int config_bmc_ntp_server_set(const char *ntp_server)
+{
+	int rc;
+
+	strncpy(config_data.bmc_ntp_server, ntp_server, MAX_NTP_SERVER_LEN);
+
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
+
+	if (config_bmc_use_ntp()) {
+		rc = stop_ntp();
+		if (rc < 0)
+			LOG_ERR("Error stopping NTP (err=%d)", rc);
+		rc = start_ntp();
+		if (rc < 0) {
+			LOG_ERR("Error restarting NTP (err=%d)", rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_NTP_SERVER				\
+	"BMC NTP server address\n"			\
+	"Usage: bmc ntp_server <server address>"
+
+static int cmd_config_bmc_ntp_server(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	config_bmc_ntp_server_set(argv[1]);
+	shell_info(sh, "BMC NTP server updated");
+
+	return 0;
+}
+
+
 int config_bmc_password_set(const char *password)
 {
 	int rc;
@@ -409,6 +522,8 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
 	SHELL_CMD_ARG(hostname,		NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
 	SHELL_CMD_ARG(ipv4_addr,	NULL, CMD_HELP_BMC_DEFAULT_IP4, cmd_config_bmc_default_ip4, 2, 0),
 	SHELL_CMD_ARG(dhcpv4,		NULL, CMD_HELP_BMC_DHCP4, cmd_config_bmc_dhcp4, 2, 0),
+	SHELL_CMD_ARG(ntp,		NULL, CMD_HELP_BMC_NTP, cmd_config_bmc_ntp, 2, 0),
+	SHELL_CMD_ARG(ntp_server,	NULL, CMD_HELP_BMC_NTP_SERVER, cmd_config_bmc_ntp_server, 2, 0),
 	SHELL_SUBCMD_SET_END
 );
 
@@ -474,6 +589,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
 	shell_print(sh, "BMC default IPv4: %s", config_default_ip4_string());
 	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
+	shell_print(sh, "BMC use NTP: %d",	config_data.bmc_use_ntp);
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
 
@@ -579,8 +695,18 @@ int config_init(void)
 
 	if (!IS_ONDISK(bmc_admin_password)) {
 		/* This defaults to "admin" */
-		strncpy(config_data.bmc_admin_password, "admin", MAX_HOSTNAME_LEN);
+		strncpy(config_data.bmc_admin_password, "admin", MAX_PW_LEN);
 	}
+
+	if (IS_ONDISK(bmc_use_ntp))
+		LOG_INF("BMC NTP: %s", config_data.bmc_use_dhcp4 ? "enabled" : "disabled");
+	else
+		config_data.bmc_use_ntp = 1; /* Default to enabled */
+
+	if (IS_ONDISK(bmc_ntp_server))
+		LOG_INF("BMC NTP server: %s", config_data.bmc_ntp_server);
+	else
+		strncpy(config_data.bmc_ntp_server, "pool.ntp.org", MAX_NTP_SERVER_LEN);
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
