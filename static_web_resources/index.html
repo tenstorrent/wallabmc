@@ -386,10 +386,22 @@
 
 				<h3>Time</h3>
 				<div class="grid-4-col">
-					<div class="info-item"><label>Current Time</label><span class="data-value" id="bmc-date-time">Loading...</span></div>
 					<div class="info-item">
+						<label>Current Time</label><span class="data-value" id="bmc-date-time">Loading...</span>
+					</div>
 					<div class="info-item">
 						<button onclick="syncTimeToBrowser()">Sync to browser</button>
+					</div>
+					<div class="info-item">
+						<label for="cfg-ntp">NTP</label>
+						<select id="cfg-ntp">
+							<option value="true">Enabled</option>
+							<option value="false">Disabled</option>
+						</select>
+					</div>
+					<div class="info-item">
+						<label for="cfg-ntp-server">NTP server</label>
+						<input type="text" id="cfg-ntp-server">
 					</div>
 				</div>
 
@@ -448,12 +460,14 @@
 		let accountServiceIdPath = null;
 		let systemIdPath = null;
 		let managerIdPath = null;
+		let networkProtocolIdPath = null;
 		let ethIdPath = null;
 		let accountIdPath = null;
 
 		// Saved config values so only have to PATCH what has changed.
 		let sysData = null;
 		let bmcData = null;
+		let networkProtocolData = null;
 		let ethData = null;
 
 		let refreshTimer = null;
@@ -540,6 +554,7 @@
 				if (!managersRoot.Members || managersRoot.Members.length === 0)
 					throw new Error("No redfish Manager found.");
 				managerIdPath = managersRoot.Members[0]['@odata.id'];
+				networkProtocolIdPath = `${managerIdPath}/NetworkProtocol`;
 
 				const ethRoot = await redfishCall(`${managerIdPath}/EthernetInterfaces`);
 				if (!ethRoot.Members || ethRoot.Members.length === 0)
@@ -597,6 +612,7 @@
 			try {
 				sysData = await redfishCall(systemIdPath);
 				bmcData = await redfishCall(managerIdPath);
+				networkProtocolData = await redfishCall(networkProtocolIdPath);
 				if (ethIdPath)
 					ethData = await redfishCall(ethIdPath);
 			} catch (err) {
@@ -648,6 +664,11 @@
 			document.getElementById('cfg-password').value = '';
 			document.getElementById('cfg-power-policy').value = sysData.PowerRestorePolicy;
 
+			if (networkProtocolData.NTP) {
+				document.getElementById('cfg-ntp').value = networkProtocolData.NTP.ProtocolEnabled.toString();
+				document.getElementById('cfg-ntp-server').value = networkProtocolData.NTP.NTPServers[0];
+			}
+
 			if (ethData) {
 				document.getElementById('cfg-hostname').value = ethData.HostName;
 
@@ -667,6 +688,7 @@
 
 			try {
 				const payloadSys = {};
+				const payloadNTP = {};
 				const payloadEth = {};
 
 				if (refreshTimer)
@@ -678,6 +700,25 @@
 					payloadSys.PowerRestorePolicy = PowerRestorePolicy;
 				if (Object.keys(payloadSys).length > 0)
 					await redfishCall(systemIdPath, 'PATCH', payloadSys);
+
+				const NTP = document.getElementById('cfg-ntp').value === 'true';
+				const isNtp = networkProtocolData.NTP ? networkProtocolData.NTP.ProtocolEnabled : false;
+				if (NTP != isNtp)
+					payloadNTP.ProtocolEnabled = NTP;
+				const NtpServer = document.getElementById('cfg-ntp-server').value;
+				if (networkProtocolData.NTP && networkProtocolData.NTP.NTPServers &&
+				    networkProtocolData.NTP.NTPServers.length > 0) {
+					if (NtpServer != networkProtocolData.NTP.NTPServers[0])
+						payloadNTP.NTPServers = [ NtpServer ];
+				} else {
+					if (NtpServer)
+						payloadNTP.NTPServers = [ NtpServer ];
+				}
+				if (Object.keys(payloadNTP).length > 0) {
+					const payloadNetworkProtocol = {};
+					payloadNetworkProtocol.NTP = payloadNTP;
+					await redfishCall(networkProtocolIdPath, 'PATCH', payloadNetworkProtocol);
+				}
 
 				if (ethData) {
 					const HostName = document.getElementById('cfg-hostname').value;
