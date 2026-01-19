@@ -3,137 +3,435 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Custom BMC Dashboard</title>
-	<!-- alternatively this could use the included static artifacts but they are very big -->
+	<title>WallaBMC Admin Dashboard</title>
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
 	<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-attach@0.9.0/lib/xterm-addon-attach.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 	<style>
-		/* Minimal CSS for a clean look */
-		:root { --primary: #007bff; --danger: #dc3545; --bg: #f4f7f6; --card: #ffffff; }
-		body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: #333; margin: 0; padding: 20px; }
-		.container { max-width: 800px; margin: auto; }
-		.logo { padding: 5px; width: 256px; }
-		.card { background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-		h1, h2 { margin-top: 0; }
+		:root {
+			/* Palette */
+			--primary: #2563eb;       /* Blue 600 */
+			--primary-hover: #1d4ed8; /* Blue 700 */
 
-		/* Login Form Styles */
-		.login-form { display: flex; flex-direction: column; gap: 10px; max-width: 300px; margin: auto; }
-		input, button { padding: 10px; border-radius: 4px; border: 1px solid #ddd; font-size: 16px; }
-		button { background: var(--primary); color: white; border: none; cursor: pointer; transition: background 0.2s; }
-		button:hover { background: #0056b3; }
+			--danger: #dc2626;        /* Red 600 */
+			--danger-hover: #b91c1c;  /* Red 700 */
 
-		/* Dashboard Styles */
-		.info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-		.info-item label { display: block; font-weight: bold; color: #666; font-size: 0.9em; }
-		.serial-num { display: inline-block; padding: 5px 10px; border-radius: 15px; font-weight: bold; background: #eee; }
-		.power-state { display: inline-block; padding: 5px 10px; border-radius: 15px; font-weight: bold; background: #eee; }
-		.power-state.On { background: #d4edda; color: #155724; }
-		.power-state.Off { background: #f8d7da; color: #721c24; }
+			--grey: #6b7280;          /* Cool Grey 500 */
+			--grey-hover: #4b5563;    /* Cool Grey 600 */
 
-		.controls-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 15px; }
+			--dark: #1f2937;          /* Grey 800 */
+			--bg: #f3f4f6;            /* Grey 100 */
+			--card-bg: #ffffff;
+
+			--text-main: #111827;
+			--text-muted: #6b7280;
+			--border: #e5e7eb;
+
+			--radius: 6px;
+			--input-height: 38px;     /* Enforced Height */
+		}
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			background: var(--bg);
+			color: var(--text-main);
+			margin: 0;
+			padding: 20px;
+			line-height: 1.5;
+		}
+
+		/* Layout & Containers */
+		.container {
+			max-width: 1000px;
+			margin: 0 auto;
+			padding-top: 20px;
+		}
+
+		.card {
+			background: var(--card-bg);
+			padding: 30px;
+			border-radius: var(--radius);
+			box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+			margin-bottom: 24px;
+			border: 1px solid var(--border);
+		}
+
+		/* Header / Nav (Reverted to original placement) */
+		.dashboard-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 30px;
+			padding-bottom: 20px;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.logo img {
+			height: 48px;
+			width: auto;
+			display: block;
+		}
+
+		.nav-actions {
+			display: flex;
+			gap: 12px;
+		}
+
+		/* Typography */
+		h2 {
+			margin: 0 0 20px 0;
+			font-size: 1.25rem;
+			color: var(--dark);
+			font-weight: 600;
+		}
+
+		/* Section Headings */
+		h3 {
+			font-size: 0.8rem;
+			font-weight: 700;
+			color: var(--text-muted);
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			margin: 25px 0 15px 0;
+			border-bottom: 1px solid var(--border);
+			padding-bottom: 8px;
+		}
+
+		/* Grid System (Keeping inputs controlled) */
+		.grid-3-col {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+			gap: 20px;
+			align-items: end;
+		}
+
+		.grid-4-col {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 15px;
+			align-items: end;
+		}
+
+		.info-item {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+
+		.info-item label {
+			font-weight: 600;
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			text-transform: uppercase;
+		}
+
+		.data-value {
+			font-family: monospace;
+			font-size: 0.95rem;
+			color: var(--dark);
+			padding: 4px 0;
+		}
+
+		/* Inputs & Buttons Consistency */
+		input, select, button {
+			height: var(--input-height);
+			box-sizing: border-box;
+			font-size: 0.9rem;
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			width: 100%; /* Fills the grid cell */
+		}
+
+		input, select {
+			padding: 0 12px;
+			background-color: #fff;
+			transition: border-color 0.2s, box-shadow 0.2s;
+		}
+
+		input:focus, select:focus {
+			border-color: var(--primary);
+			outline: none;
+			box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+		}
+
+		/* Button Styles */
+		button {
+			border: none;
+			font-weight: 500;
+			cursor: pointer;
+			color: white;
+			transition: background 0.2s;
+			padding: 0 20px;
+		}
+
+		/* Primary (Default) */
+		button { background: var(--primary); }
+		button:hover { background: var(--primary-hover); }
+
+		/* Danger (Red) */
 		button.danger { background: var(--danger); }
-		button.danger:hover { background: #a71d2a; }
+		button.danger:hover { background: var(--danger-hover); }
 
-		#loading-bar { height: 4px; background: var(--primary); width: 0%; transition: width 0.3s; position: fixed; top: 0; left: 0; }
+		/* Grey (Graceful Shutdown) */
+		button.grey { background: var(--grey); }
+		button.grey:hover { background: var(--grey-hover); }
 
-		/* Terminal Modal Styles */
+		/* Dark (Console) */
+		button.dark { background: var(--dark); }
+		button.dark:hover { background: #000; }
+
+		/* Secondary (Logout) */
+		button.secondary {
+			background: white;
+			border: 1px solid var(--border);
+			color: var(--text-muted);
+		}
+		button.secondary:hover {
+			background: #f9fafb;
+			color: var(--dark);
+			border-color: #d1d5db;
+		}
+
+		button.full-width {
+			width: 100%;
+			margin-top: 20px;
+		}
+
+		/* Action Buttons Grid */
+		.controls-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+			gap: 15px;
+			margin-top: 15px;
+		}
+
+		/* Login Specifics */
+		.login-form {
+			display: flex;
+			flex-direction: column;
+			gap: 15px;
+			max-width: 350px;
+			margin: 30px auto;
+		}
+
+		/* Badges */
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			padding: 0 12px;
+			border-radius: 50px;
+			font-size: 0.75rem;
+			font-weight: 700;
+			text-transform: uppercase;
+			height: 24px;
+			background: #e5e7eb;
+			color: #374151;
+		}
+		.badge.On { background: #dcfce7; color: #166534; }
+		.badge.Off { background: #fee2e2; color: #991b1b; }
+
+		/* Utils */
+		.section-header-flex {
+			display:flex;
+			justify-content:space-between;
+			align-items:center;
+			border-bottom: 1px solid var(--border);
+			margin-bottom:20px;
+			padding-bottom:15px;
+		}
+		.section-header-flex h2 { border:none; margin:0; padding:0; }
+
+		.uuid-display {
+			font-size: 0.85em;
+			color: var(--text-muted);
+			font-family: monospace;
+		}
+
+		#loading-bar {
+			height: 3px;
+			background: var(--primary);
+			width: 0%;
+			transition: width 0.3s;
+			position: fixed;
+			top: 0;
+			left: 0;
+			z-index: 9999;
+		}
+
+		.hidden { display: none !important; }
+		.helper-text { font-size: 0.85em; color: var(--text-muted); margin-top: 10px; }
+
+		/* Terminal Modal */
 		.modal-overlay {
 			position: fixed; top: 0; left: 0; width: 100%; height: 100%;
 			background: rgba(0, 0, 0, 0.6);
 			display: flex; justify-content: center; align-items: center;
-			z-index: 1000;
+			z-index: 1000; backdrop-filter: blur(2px);
 		}
-
 		.term-window {
-			background: #000;
-			padding: 5px;
-			border-radius: 6px;
-			box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-			width: 80%; max-width: 900px;
+			background: #111827; padding: 0; border-radius: 8px;
+			box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+			width: 90%; max-width: 960px; overflow: hidden;
+			border: 1px solid #374151;
 		}
-
 		.term-header {
 			display: flex; justify-content: space-between; align-items: center;
-			padding: 5px 10px;
-			background: #333;
-			color: #fff;
-			font-family: monospace;
-			border-radius: 4px 4px 0 0;
-			margin-bottom: 5px;
+			padding: 10px 15px; background: #1f2937; color: #e5e7eb;
+			font-family: monospace; font-size: 14px;
+			border-bottom: 1px solid #374151;
 		}
-
-		.term-controls {
-			display: flex;
-			gap: 5px;
+		.term-controls button {
+			background: transparent; color: #9ca3af; font-size: 1.2rem;
+			padding: 0 5px; margin-left: 10px; width: auto; border: none;
 		}
-
-		.close-btn {
-			background: transparent; border: none; color: #fff; font-size: 1.5rem;
-			cursor: pointer; padding: 0 5px;
-		}
-		.close-btn:hover { color: #ff5555; background: transparent; }
-
-		/* Ensure the container has a specific height for xterm */
-		#terminal-container {
-			height: 500px;
-			width: 100%;
-		}
-
-		.hidden { display: none !important; }
+		.term-controls button:hover { color: white; background: transparent; }
+		#terminal-container { height: 500px; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
 	</style>
 </head>
 <body>
 	<div id="loading-bar"></div>
-	<div class="logo">
-		<img src="logo.jpeg" alt="WallaBMC">
-	</div>
+
 	<div class="container">
+
 		<div id="login-section" class="card">
-			<h2>WallaBMC Authentication</h2>
-			<p>Factory default is admin/admin</p>
+			<div style="text-align: center; margin-bottom: 30px; margin-top: 20px;">
+				<img src="logo.jpeg" alt="WallaBMC" style="max-width: 200px; height: auto;">
+			</div>
 			<form class="login-form" onsubmit="event.preventDefault(); connectToBmc();">
-				<input type="text" id="username" placeholder="Username">
-				<input type="password" id="password" placeholder="Password">
+				<input type="text" id="username" placeholder="Username" value="admin" class="hidden">
+				<input type="password" id="password" placeholder="Password (default: 'admin')">
 				<button type="submit">Login</button>
 			</form>
-			<p id="login-error" style="color: var(--danger);" class="hidden"></p>
+			<p id="login-error" style="text-align: center; color: var(--danger); margin-top: 15px;" class="hidden"></p>
 		</div>
 
 		<div id="dashboard-section" class="hidden">
-
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-				<button onclick="logout()" style="background: #6c757d;">Logout</button>
-				<button onclick="openTerminal()" style="background: #333; margin-right: 10px;">Terminal</button>
-			</div>
-
-			<div class="card">
-				<h1>System Overview</h1>
-				<p>
-				  UUID: <span id="sys-uuid" class="serial-num">Loading...</span>
-				  Serial: <span id="sys-serial" class="serial-num">Loading...</span>
-				</p>
-				<div class="info-grid">
-					<div class="info-item"><label>Name</label><span id="sys-name">Loading...</span></div>
-					<div class="info-item"><label>Manufacturer</label><span id="sys-manufacturer">Loading...</span></div>
-					<div class="info-item"><label>Model</label><span id="sys-model">Loading...</span></div>
-					<div class="info-item"><label>CPU</label><span id="sys-cpu-description">Loading...</span></div>
-					<div class="info-item"><label>CPU Count</label><span id="sys-cpu">Loading...</span></div>
-					<div class="info-item"><label>Total Memory</label><span id="sys-memory">Loading...</span></div>
+			<div class="dashboard-header">
+				<div style="display: flex; align-items: center; gap: 15px;">
+					<div class="logo">
+						<img src="logo.jpeg" alt="WallaBMC">
+					</div>
+					<h1 style="font-size: 1.5rem; margin: 0; color: var(--dark);">WallaBMC Admin Dashboard</h1>
+				</div>
+				<div class="nav-actions">
+					<button class="dark" onclick="openTerminal()">BMC Console</button>
+					<button class="secondary" onclick="logout()">Logout</button>
 				</div>
 			</div>
 
 			<div class="card">
-				<h2>Power Control</h2>
-				<p>Current State: <span id="power-state-badge" class="power-state">Unknown</span></p>
+				<div class="section-header-flex">
+					<h2>System Overview</h2>
+					<div class="uuid-display">
+						UUID: <span id="sys-uuid">Loading...</span>
+					</div>
+				</div>
+
+				<div class="grid-3-col">
+					<div class="info-item"><label>Name</label><span class="data-value" id="sys-name">Loading...</span></div>
+					<div class="info-item"><label>Manufacturer</label><span class="data-value" id="sys-manufacturer">Loading...</span></div>
+					<div class="info-item"><label>Model</label><span class="data-value" id="sys-model">Loading...</span></div>
+					<div class="info-item"><label>Serial</label><span class="data-value" id="sys-serial">Loading...</span></div>
+					<div class="info-item"><label>CPU</label><span class="data-value" id="sys-cpu-model">Loading...</span></div>
+					<div class="info-item"><label>CPU Count</label><span class="data-value" id="sys-cpu">Loading...</span></div>
+					<div class="info-item"><label>Memory</label><span class="data-value" id="sys-memory">Loading...</span></div>
+				</div>
+			</div>
+
+			<div class="card">
+				<h2>Host Power Control</h2>
+				<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+					<label style="font-weight: bold; color: var(--text-muted); font-size: 0.8rem;">CURRENT STATE:</label>
+					<span id="power-state-badge" class="badge">Unknown</span>
+				</div>
 
 				<div class="controls-grid">
 					<button onclick="sendPowerAction('On')">Power On</button>
-					<button class="danger" onclick="sendPowerAction('GracefulShutdown')">Graceful Shutdown</button>
 					<button class="danger" onclick="sendPowerAction('ForceOff')">Force Off</button>
 					<button class="danger" onclick="sendPowerAction('ForceRestart')">Force Restart</button>
-					<button onclick="refreshSystemData()">Refresh Status</button>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="section-header-flex">
+					<h2>BMC</h2>
+					<div class="uuid-display">
+						UUID: <span id="bmc-uuid">Loading...</span>
+					</div>
+				</div>
+
+				<div class="grid-4-col" style="margin-bottom: 25px;">
+					<div class="info-item"><label>Name</label><span class="data-value" id="bmc-name">Loading...</span></div>
+				</div>
+
+				<h3>Security</h3>
+				<div class="grid-4-col">
+					<div class="info-item">
+						<label for="cfg-password">New Password</label>
+						<input type="password" id="cfg-password" placeholder="Unchanged">
+					</div>
+				</div>
+
+				<h3>Host Power Policy</h3>
+				<div class="grid-4-col">
+					<div class="info-item">
+						<label for="cfg-power-policy">Restore Policy</label>
+						<select id="cfg-power-policy">
+							<option value="AlwaysOff">Always Off</option>
+							<option value="AlwaysOn">Always On</option>
+						</select>
+					</div>
+				</div>
+
+				<h3>Time</h3>
+				<div class="grid-4-col">
+					<div class="info-item">
+						<label>Current Time</label><span class="data-value" id="bmc-date-time">Loading...</span>
+					</div>
+					<div class="info-item">
+						<button onclick="syncTimeToBrowser()">Sync to browser</button>
+					</div>
+					<div class="info-item">
+						<label for="cfg-ntp">NTP</label>
+						<select id="cfg-ntp">
+							<option value="true">Enabled</option>
+							<option value="false">Disabled</option>
+						</select>
+					</div>
+					<div class="info-item">
+						<label for="cfg-ntp-server">NTP server</label>
+						<input type="text" id="cfg-ntp-server">
+					</div>
+				</div>
+
+				<h3>Network</h3>
+				<div class="grid-4-col">
+					<div class="info-item"><label>IP Address</label><span class="data-value" id="bmc-ip-address">Loading...</span></div>
+					<div class="info-item"><label>Subnet Mask</label><span class="data-value" id="bmc-subnet">Loading...</span></div>
+					<div class="info-item"><label>Gateway</label><span class="data-value" id="bmc-gateway">Loading...</span></div>
+					<div class="info-item"><label>Address type</label><span class="data-value" id="bmc-address-type">Loading...</span></div>
+
+					<div class="info-item">
+						<label for="cfg-hostname">Hostname</label>
+						<input type="text" id="cfg-hostname" placeholder="New Hostname">
+					</div>
+					<div class="info-item">
+						<label for="cfg-dhcp">IP Assignment</label>
+						<select id="cfg-dhcp">
+							<option value="true">Prefer DHCP</option>
+							<option value="false">Static</option>
+						</select>
+					</div>
+					<div class="info-item">
+						<label for="cfg-static-ip">Static IP Address</label>
+						<input type="text" id="cfg-static-ip" placeholder="x.x.x.x">
+					</div>
+				</div>
+
+				<div class="controls-grid">
+					<button class="danger" onclick="saveBmcConfig()">Apply Changes</button>
+					<button onclick="refreshConfigData()">Discard Changes</button>
 				</div>
 			</div>
 		</div>
@@ -143,177 +441,363 @@
 				<div class="term-header">
 					<span>Serial Console</span>
 					<div class="term-controls">
-						<button class="close-btn" onclick="hideTerminal()" title="Minimize">_</button>
-						<button class="close-btn" onclick="closeTerminal()" title="Close">×</button>
+						<button onclick="hideTerminal()" title="Minimize">&minus;</button>
+						<button onclick="closeTerminal()" title="Close">&times;</button>
 					</div>
 				</div>
 				<div id="terminal-container"></div>
 			</div>
 		</div>
+
 	</div>
 
 	<script>
-		// --- Global Variables ---
+		// Authentication
 		let basicAuthHeader = null;
-		// The specific URI for the main computer system (e.g., /redfish/v1/Systems/1)
-		// We will auto-discover this.
+		let wsAuthHeader = null;
+
+		// Redfish URI paths
+		let accountServiceIdPath = null;
 		let systemIdPath = null;
+		let managerIdPath = null;
+		let networkProtocolIdPath = null;
+		let ethIdPath = null;
+		let accountIdPath = null;
+
+		// Saved config values so only have to PATCH what has changed.
+		let sysData = null;
+		let bmcData = null;
+		let networkProtocolData = null;
+		let ethData = null;
 
 		let refreshTimer = null;
 
-		// --- UI Helpers ---
+		// UI Helpers
 		const show = (id) => document.getElementById(id).classList.remove('hidden');
 		const hide = (id) => document.getElementById(id).classList.add('hidden');
-		const setText = (id, text) => document.getElementById(id).innerText = text || 'N/A';
+		const setText = (id, text) => {
+			document.getElementById(id).innerText = text || 'N/A';
+		};
 		const setLoading = (isLoading) => document.getElementById('loading-bar').style.width = isLoading ? '100%' : '0%';
 
-		// --- Core Redfish API Fetcher ---
+		// Redfish API Fetcher
 		async function redfishCall(path, method = 'GET', body = null) {
 			setLoading(true);
 			try {
 				const options = {
 					method: method,
 					headers: {
-						// We use Basic Auth for simplicity in this standalone file.
 						'authorization': basicAuthHeader,
 						'accept': 'application/json',
-						'content-type': 'application/json'
-					}
+						'content-type': 'application/json',
+						'x-auth-code': 'webui',
+					},
 				};
-				if (body) options.body = JSON.stringify(body);
+				if (body)
+					options.body = JSON.stringify(body);
 
-				// NOTE: Because we are serving this HTML FROM the BMC,
-				// we can use relative paths (e.g., '/redfish/v1/Systems').
 				const response = await fetch(path, options);
 
 				if (!response.ok) {
-					if (response.status === 401) throw new Error("Authentication Failed");
+					if (response.status === 401)
+						throw new Error("Authentication Failed");
 					throw new Error(`Redfish Error: ${response.status}`);
 				}
 
-				// 204 No Content is common for successful POST actions (like Power On)
-				if (response.status === 204) return null;
+				if (response.status === 204)
+					return null;
 
 				return await response.json();
+
 			} finally {
 				setLoading(false);
 			}
 		}
 
-		// --- Main Logic ---
+		async function authenticate() {
+			const user = document.getElementById('username').value;
+			const pass = document.getElementById('password').value;
+
+			basicAuthHeader = 'Basic ' + btoa(user + ":" + pass);
+			wsAuthHeader = 'Basic_' + user + "_" + pass;
+
+			const redfishRoot = await redfishCall('/redfish/v1');
+			if (!redfishRoot.AccountService)
+				throw new Error("No redfish AccountService found.");
+			accountServiceIdPath = redfishRoot.AccountService['@odata.id'];
+
+			// Validate credentials
+			const accountService = await redfishCall(accountServiceIdPath);
+			if (!accountService.Accounts)
+				throw new Error("No redfish Accounts found.");
+		}
 
 		async function connectToBmc() {
 			const user = document.getElementById('username').value;
 			const pass = document.getElementById('password').value;
-			if(!user || !pass) return;
+			if (!user || !pass)
+				return;
 
-			// Create the Basic Auth header string once and store it
-			basicAuthHeader = 'Basic ' + btoa(user + ":" + pass);
-			wsAuthHeader = 'Basic_' + user + "_" + pass;
 			hide('login-error');
 
 			try {
-				// Step 1: Discover the System ID URI
-				// We fetch the root systems collection to find the actual ID (it's not always '1')
+				await authenticate();
+
+				// Discover System
 				const systemsRoot = await redfishCall('/redfish/v1/Systems');
-
-				if (!systemsRoot.Members || systemsRoot.Members.length === 0) {
-					throw new Error("No ComputerSystem instances found on this BMC.");
-				}
-
-				// Grab the first system found.
+				if (!systemsRoot.Members || systemsRoot.Members.length === 0)
+					throw new Error("No redfish ComputerSystem found.");
 				systemIdPath = systemsRoot.Members[0]['@odata.id'];
-				console.log(`System discovered at: ${systemIdPath}`);
 
-				// Step 2: Switch UI
+				// Discover Manager (BMC) and BMC Ethernet Interface
+				const managersRoot = await redfishCall('/redfish/v1/Managers');
+				if (!managersRoot.Members || managersRoot.Members.length === 0)
+					throw new Error("No redfish Manager found.");
+				managerIdPath = managersRoot.Members[0]['@odata.id'];
+				networkProtocolIdPath = `${managerIdPath}/NetworkProtocol`;
+
+				const ethRoot = await redfishCall(`${managerIdPath}/EthernetInterfaces`);
+				if (!ethRoot.Members || ethRoot.Members.length === 0)
+					console.log(`No BMC Eithernet found`)
+				else
+					ethIdPath = ethRoot.Members[0]['@odata.id'];
+
+				// Discover User Account Path
+				const accountsRoot = await redfishCall(`${accountServiceIdPath}/Accounts`);
+				if (accountsRoot.Members) {
+					for (let member of accountsRoot.Members) {
+						path = member['@odata.id'];
+						const account = await redfishCall(path);
+						if (account.UserName === user) {
+							accountIdPath = path
+							break;
+						}
+					}
+				}
+				if (!accountIdPath)
+					throw new Error("No redfish user account found.");
+
 				hide('login-section');
 				show('dashboard-section');
 
-				// Step 3: Load initial data
 				await refreshSystemData();
+				await refreshConfigData();
 
 			} catch (err) {
 				show('login-error');
 				setText('login-error', err.message);
-				basicAuthHeader = null; // Reset on failure
-				wsAuthHeader = null; // Reset on failure
+				basicAuthHeader = null;
+				wsAuthHeader = null;
 			}
 		}
 
 		function logout() {
-			if (refreshTimer) clearTimeout(refreshTimer);
+			if (refreshTimer)
+				clearTimeout(refreshTimer);
 			refreshTimer = null;
-
-			closeTerminal() /* Term might be open */
+			closeTerminal();
 
 			basicAuthHeader = null;
 			wsAuthHeader = null;
-			systemIdPath = null;
 
 			document.getElementById('password').value = '';
-			setText('power-state-badge', 'Unknown');
-
 			hide('dashboard-section');
 			show('login-section');
 		}
 
 		async function refreshSystemData() {
-			if(!systemIdPath) return;
+			if (refreshTimer)
+				clearTimeout(refreshTimer);
 
 			try {
-				if (refreshTimer) clearTimeout(refreshTimer);
+				sysData = await redfishCall(systemIdPath);
+				bmcData = await redfishCall(managerIdPath);
+				networkProtocolData = await redfishCall(networkProtocolIdPath);
+				if (ethIdPath)
+					ethData = await redfishCall(ethIdPath);
+			} catch (err) {
+				console.error("Refresh failed", err);
+				if (refreshTimer)
+					refreshTimer = setTimeout(refreshSystemData, 3000);
+				return;
+			}
+
+			setText('sys-uuid', sysData.UUID);
+			setText('sys-serial', sysData.SerialNumber);
+			setText('sys-name', sysData.Name);
+			setText('sys-manufacturer', sysData.Manufacturer);
+			setText('sys-model', sysData.Model);
+			setText('sys-memory', sysData.MemorySummary ? `${sysData.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
+			setText('sys-cpu', sysData.ProcessorSummary ? sysData.ProcessorSummary.Count : 'N/A');
+			setText('sys-cpu-model', sysData.ProcessorSummary ? sysData.ProcessorSummary.Model : 'N/A');
+
+			const pstate = document.getElementById('power-state-badge');
+			setText('power-state-badge', sysData.PowerState);
+			pstate.className = 'badge ' + (sysData.PowerState || 'Unknown').replace(/\s/g, '');
+
+			setText('bmc-uuid', bmcData.UUID);
+			setText('bmc-name', bmcData.Name);
+
+			const bmc_date = new Date(bmcData.DateTime);
+			setText('bmc-date-time', bmc_date.toLocaleString(undefined,
+					{ year: 'numeric',
+					  month: 'short',
+					  day: 'numeric',
+					  hour: '2-digit',
+					  minute: '2-digit',
+					  hour12: false } ));
+
+			if (ethData) {
+				if (ethData.IPv4Addresses && ethData.IPv4Addresses.length > 0) {
+					setText('bmc-ip-address', ethData.IPv4Addresses[0].Address);
+					setText('bmc-address-type', ethData.IPv4Addresses[0].AddressOrigin);
+					setText('bmc-subnet', ethData.IPv4Addresses[0].SubnetMask);
+					setText('bmc-gateway', ethData.IPv4Addresses[0].Gateway);
+				}
+			}
+
+			if (refreshTimer)
+				refreshTimer = setTimeout(refreshSystemData, 10000);
+		}
+
+		async function refreshConfigData() {
+			document.getElementById('cfg-password').value = '';
+			document.getElementById('cfg-power-policy').value = sysData.PowerRestorePolicy;
+
+			if (networkProtocolData.NTP) {
+				document.getElementById('cfg-ntp').value = networkProtocolData.NTP.ProtocolEnabled.toString();
+				document.getElementById('cfg-ntp-server').value = networkProtocolData.NTP.NTPServers[0];
+			}
+
+			if (ethData) {
+				document.getElementById('cfg-hostname').value = ethData.HostName;
+
+				const isDhcp = ethData.DHCPv4 ? ethData.DHCPv4.DHCPEnabled : false;
+				document.getElementById('cfg-dhcp').value = isDhcp.toString();
+
+				if (ethData.IPv4StaticAddresses && ethData.IPv4StaticAddresses.length > 0)
+					document.getElementById('cfg-static-ip').value = ethData.IPv4StaticAddresses[0].Address;
+				else
+					document.getElementById('cfg-static-ip').value = null;
+			}
+		}
+
+		async function saveBmcConfig() {
+			if (!confirm("Apply settings? Network changes may disrupt connection."))
+				return;
+
+			try {
+				const payloadSys = {};
+				const payloadNTP = {};
+				const payloadEth = {};
+
+				if (refreshTimer)
+					clearTimeout(refreshTimer);
 				refreshTimer = null;
 
-				// Fetch the main system object
-				const data = await redfishCall(systemIdPath);
+				const PowerRestorePolicy = document.getElementById('cfg-power-policy').value;
+				if (PowerRestorePolicy != sysData.PowerRestorePolicy)
+					payloadSys.PowerRestorePolicy = PowerRestorePolicy;
+				if (Object.keys(payloadSys).length > 0)
+					await redfishCall(systemIdPath, 'PATCH', payloadSys);
 
-				// Populate Inventory
-				setText('sys-uuid', data.UUID);
-				setText('sys-serial', data.SerialNumber);
-				setText('sys-name', data.Name);
-				setText('sys-manufacturer', data.Manufacturer);
-				setText('sys-model', data.Model);
-				setText('sys-memory', data.MemorySummary ? `${data.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
-				setText('sys-cpu', data.ProcessorSummary ? data.ProcessorSummary.Count : 'N/A');
-				setText('sys-cpu-description', data.ProcessorSummary ? data.ProcessorSummary.Description : 'N/A');
+				const NTP = document.getElementById('cfg-ntp').value === 'true';
+				const isNtp = networkProtocolData.NTP ? networkProtocolData.NTP.ProtocolEnabled : false;
+				if (NTP != isNtp)
+					payloadNTP.ProtocolEnabled = NTP;
+				const NtpServer = document.getElementById('cfg-ntp-server').value;
+				if (networkProtocolData.NTP && networkProtocolData.NTP.NTPServers &&
+				    networkProtocolData.NTP.NTPServers.length > 0) {
+					if (NtpServer != networkProtocolData.NTP.NTPServers[0])
+						payloadNTP.NTPServers = [ NtpServer ];
+				} else {
+					if (NtpServer)
+						payloadNTP.NTPServers = [ NtpServer ];
+				}
+				if (Object.keys(payloadNTP).length > 0) {
+					const payloadNetworkProtocol = {};
+					payloadNetworkProtocol.NTP = payloadNTP;
+					await redfishCall(networkProtocolIdPath, 'PATCH', payloadNetworkProtocol);
+				}
 
-				// Update Power State UI
-				const pstate = document.getElementById('power-state-badge');
-				setText('power-state-badge', data.PowerState);
-				// Reset classes and add the current state class for coloring
-				pstate.className = 'power-state ' + data.PowerState.replace(/\s/g, '');
+				if (ethData) {
+					const HostName = document.getElementById('cfg-hostname').value;
+					if (HostName && HostName != ethData.HostName)
+						payloadEth.HostName = HostName;
 
-				refreshTimer = setTimeout(refreshSystemData, 10000);
+					const DHCPv4 = document.getElementById('cfg-dhcp').value === 'true';
+					const isDhcp = ethData.DHCPv4 ? ethData.DHCPv4.DHCPEnabled : false;
+					if (DHCPv4 != isDhcp)
+						payloadEth.DHCPv4 = { DHCPEnabled: DHCPv4 };
+
+					const IPv4StaticAddress = document.getElementById('cfg-static-ip').value;
+					if (IPv4StaticAddress) {
+						if (ethData.IPv4StaticAddresses.length === 0 ||
+							IPv4StaticAddress != ethData.IPv4StaticAddresses[0].Address)
+							payloadEth.IPv4StaticAddresses = [{ Address: IPv4StaticAddress }];
+					} else {
+						if (ethData.IPv4StaticAddresses.length > 0)
+							payloadEth.IPv4StaticAddresses = [];
+					}
+
+					if (Object.keys(payloadEth).length > 0)
+						await redfishCall(ethIdPath, 'PATCH', payloadEth);
+				}
+
+				await refreshSystemData();
+				await refreshConfigData();
+
+				/* New password last after other updates */
+				const newPass = document.getElementById('cfg-password').value;
+				if (newPass) {
+					await redfishCall(accountIdPath, 'PATCH', { Password: newPass });
+					document.getElementById('cfg-password').value = '';
+					document.getElementById('password').value = newPass;
+					await authenticate();
+				}
 
 			} catch (err) {
-				alert("Failed to refresh data: " + err.message);
+				alert("Error saving config: " + err.message);
 			}
 		}
 
 		async function sendPowerAction(resetType) {
-			if(resetType != 'On' && (!systemIdPath || !confirm(`Are you sure you want to send power command: ${resetType}?`))) return;
+			if (resetType !== 'On' && !confirm(`Confirm power action: ${resetType}?`))
+				return;
 
 			try {
-				// Construct the action URI.
-				// Standard Redfish is SystemURI + "/Actions/ComputerSystem.Reset"
-				// A highly robust client would dynamically read the 'Actions' property from the system response,
-				// but hardcoding the standard path usually works for simple BMCs.
+				if (refreshTimer)
+					clearTimeout(refreshTimer);
+				refreshTimer = null;
+
 				const actionUri = `${systemIdPath}/Actions/ComputerSystem.Reset`;
-
-				console.log(`Sending ${resetType} to ${actionUri}`);
-
 				await redfishCall(actionUri, 'POST', { "ResetType": resetType });
 
-				// Poll for status update after a few seconds
-				if (refreshTimer) clearTimeout(refreshTimer);
 				refreshTimer = setTimeout(refreshSystemData, 3000);
-
 			} catch (err) {
-				 alert(`Failed to execute power action: ${err.message}`);
+				alert(`Failed: ${err.message}`);
 			}
 		}
 
-		// Global variables for Terminal
+		async function syncTimeToBrowser(resetType) {
+			try {
+				const new_date = new Date();
+				new_date.toISOString();
+
+				if (refreshTimer)
+					clearTimeout(refreshTimer);
+				refreshTimer = null;
+
+				bmcData = await redfishCall(managerIdPath);
+				await redfishCall(managerIdPath, 'PATCH', { "DateTime": new_date });
+
+				refreshTimer = setTimeout(refreshSystemData, 3000);
+			} catch (err) {
+				alert(`Failed: ${err.message}`);
+			}
+		}
+
+		// --- Terminal Handling ---
 		let term = null;
 		let ws = null;
 		let ws_open = false;
@@ -324,49 +808,40 @@
 			if (!term) {
 				term = new Terminal({ cursorBlink: true, theme: { background: '#000000' } });
 				const fitAddon = new FitAddon.FitAddon();
-
 				term.loadAddon(fitAddon);
-				fitAddon.fit();
 
 				const container = document.getElementById('terminal-container');
 				term.open(container);
+				fitAddon.fit();
 
-				term.write("Welcome to Atlantis! 🔱\r\nConnecting... ");
+				term.write("Connecting to BMC Console...\r\n");
 
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				const wsUrl = `${socketProtocol}//${window.location.host}/console`;
 
-				console.log("Connecting to console: " + wsUrl);
 				ws = new WebSocket(wsUrl, [wsAuthHeader]);
 				ws.addEventListener('open', () => {
-					// \x1b[1;32m is Green Bold, \x1b[0m is Reset
-					term.write('\x1b[1;32mConnected.\x1b[0m\r\n');
-					fitAddon.fit();
+					const attachAddon = new AttachAddon.AttachAddon(ws);
+					term.loadAddon(attachAddon);
+					// XXX: fitAddon.fit();
 					ws_open = true;
-				});
 
+					term.write('\x1b[1;32mConnected. Welcome to WallaBMC 🦘\x1b[0m\r\n');
+					term.write('\x1b[1;32mbmc:~$\x1b[0m ');
+				});
 				ws.addEventListener('close', (event) => {
 					if (!ws_open) {
 						term.write(`\x1b[1;31mFailed! (code ${event.code})\x1b[0m\r\n`);
-						if (socketProtocol === 'wss:' && (event.code === 1006 || event.code == 1015)) {
+						if (socketProtocol === 'wss:' && (event.code === 1006 || event.code === 1015))
 							term.write('\x1b[33mPossible websocket TLS/SSL error.\x1b[0m\r\n');
-						}
 					} else {
 						term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\r\n`);
 					}
-					if (event.code === 1005) {
+					if (event.code === 1005)
 						term.write('\x1b[33mPossible authentication error.\x1b[0m\r\n');
-					}
-					fitAddon.fit();
 					ws_open = false;
 				});
-
-				const attachAddon = new AttachAddon.AttachAddon(ws);
-
-				term.loadAddon(attachAddon);
-				fitAddon.fit();
 			}
-
 			term.focus();
 		}
 
@@ -375,23 +850,17 @@
 		}
 
 		function closeTerminal() {
-			document.getElementById('term-modal').classList.add('hidden');
-
-			// 2. Cleanup WebSocket
+			hideTerminal();
 			if (ws) {
 				ws.close();
 				ws = null;
 			}
 			ws_open = false;
-
-			// 3. Destroy Terminal instance to free memory
 			if (term) {
 				term.dispose();
 				term = null;
 			}
-
-			const container = document.getElementById('terminal-container');
-			container.innerHTML = '';
+			document.getElementById('terminal-container').innerHTML = '';
 		}
 	</script>
 </body>

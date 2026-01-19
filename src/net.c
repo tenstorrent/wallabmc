@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(wallabmc_net, LOG_LEVEL_INF);
 #include "net.h"
 #include "dhcp.h"
 #include "config.h"
+#include "ntp.h"
 
 int net_do_set_hostname(const char *hostname)
 {
@@ -64,6 +65,10 @@ int net_do_set_default_ip4(uint32_t ip4_addr)
 			}
 		}
 	}
+
+	/* Just remove any manual address if this was 0 */
+	if (!ip4_addr)
+		return 0;
 
 	addr.s_addr = ip4_addr;
 	if_addr = net_if_ipv4_addr_add(iface, &addr, NET_ADDR_OVERRIDABLE, 0);
@@ -118,6 +123,11 @@ int net_init(void)
 	}
 
 	LOG_INF("Network hostname: %s", net_hostname_get());
+
+	LOG_DBG("NTP init");
+	rc = ntp_init();
+	if (rc)
+		LOG_ERR("NTP init failed");
 
 	return 0;
 }

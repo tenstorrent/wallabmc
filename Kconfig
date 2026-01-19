@@ -2,6 +2,26 @@
 
 mainmenu "WallaBMC"
 
+config APP_DNS_RESOLVE
+	bool
+	select REQUIRES_FULL_LIBC
+	select NET_SOCKETS_SERVICE
+	select DNS_RESOLVER
+	select NET_DHCPV4_OPTION_DNS_ADDRESS
+	# If DHCP is not enabled, then need these. For now, DNS/NTP
+	# requires DHCP.
+	#CONFIG_DNS_SERVER_IP_ADDRESSES=y
+	#CONFIG_DNS_SERVER1="192.168.0.1"
+
+config APP_NTP
+	bool "NTP time synchronisation"
+	select SNTP
+	select APP_DNS_RESOLVE
+	# Could these options reduce our code?
+	#CONFIG_NET_CONFIG_CLOCK_SNTP_INIT=y
+	#CONFIG_NET_CONFIG_CLOCK_SNTP_SET_RTC=y
+	default y
+
 config MAIN_STACK_SIZE
 	int
 	default 4096 if PERSISTENT_STORAGE
