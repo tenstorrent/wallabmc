@@ -31,12 +31,12 @@ static const struct gpio_dt_spec power_gpios[] = {
 
 static bool system_power_state = false;
 
-bool get_power_state(void)
+bool power_get_state(void)
 {
 	return system_power_state;
 }
 
-int power_on(void)
+static int power_on(void)
 {
 	int i, ret;
 
@@ -53,7 +53,7 @@ int power_on(void)
 	return 0;
 }
 
-int power_off(void)
+static int power_off(void)
 {
 	int i, ret;
 
@@ -68,6 +68,23 @@ int power_off(void)
 	system_power_state = false;
 
 	return 0;
+}
+
+void power_set_state(bool on)
+{
+	int ret;
+
+	if (on)
+		ret = power_on();
+	else
+		ret = power_off();
+
+	if (ret < 0) {
+		LOG_ERR("Failed to set power state: %d", ret);
+		return;
+	}
+
+	LOG_INF("System Power State changed to: %s", power_get_state() ? "ON" : "OFF");
 }
 
 int power_init(void)

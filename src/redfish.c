@@ -37,23 +37,6 @@ static char out_buffer[1024];
 static char in_buffer[512];
 static size_t in_buffer_len;
 
-void set_power_state(bool on)
-{
-	int ret;
-
-	if (on)
-		ret = power_on();
-	else
-		ret = power_off();
-
-	if (ret < 0) {
-		LOG_ERR("Failed to set power state: %d", ret);
-		return;
-	}
-
-	LOG_INF("System Power State changed to: %s", get_power_state() ? "ON" : "OFF");
-}
-
 /*** Structures for JSON encoding ***/
 
 struct redfish_reset_payload {
@@ -1256,7 +1239,7 @@ static int system_get_handler(char *out_buf, size_t out_buf_len)
 		},
 		.serial_number = serial_number,
 		.power_restore_policy = config_host_auto_poweron() ? "AlwaysOn" : "AlwaysOff",
-		.power_state = get_power_state() ? "On" : "Off",
+		.power_state = power_get_state() ? "On" : "Off",
 		.actions = {
 			.reset_action = {
 				.target = "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
@@ -1301,9 +1284,9 @@ static int system_reset_post_handler(char *in_buf, size_t in_buf_len)
 	LOG_INF("Reset Action: %s", payload.reset_type);
 
 	if (strcmp(payload.reset_type, "On") == 0) {
-		set_power_state(true);
+		power_set_state(true);
 	} else if (strcmp(payload.reset_type, "ForceOff") == 0) {
-		set_power_state(false);
+		power_set_state(false);
 	} else if (strcmp(payload.reset_type, "PowerCycle") == 0) {
 		power_reset();
 	} else {
