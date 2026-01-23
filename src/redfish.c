@@ -29,354 +29,11 @@
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
-static char serial_number[] = "12345";
-
 /* This is racy because several requests could be concurrently processing */
 /* XXX: must fix and make these per-client */
 static char out_buffer[1024];
 static char in_buffer[512];
 static size_t in_buffer_len;
-
-/*** Structures for JSON encoding ***/
-
-struct redfish_reset_payload {
-	const char *reset_type;
-};
-static const struct json_obj_descr reset_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_reset_payload, "ResetType",
-				  reset_type, JSON_TOK_STRING)
-};
-
-/* Redfish Version response */
-struct redfish_version {
-	const char *v1;
-};
-static const struct json_obj_descr version_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_version, "v1",
-				  v1, JSON_TOK_STRING),
-};
-
-/* Collection: Member nested object */
-struct redfish_member {
-	const char *odata_id;
-};
-static const struct json_obj_descr member_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_member, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-};
-
-/* Collection response */
-struct redfish_collection {
-	const char *odata_id;
-	const char *odata_type;
-	const char *name;
-	int32_t members_count;
-	size_t members_len;
-	struct redfish_member members[1];
-};
-static const struct json_obj_descr collection_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.type",
-				  odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "Name",
-				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection,
-				  "Members@odata.count", members_count,
-				  JSON_TOK_NUMBER),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_collection,
-				       "Members", members, 1,
-				       members_len, member_descr,
-				       ARRAY_SIZE(member_descr)),
-};
-
-/* Redfish Link (nested by others) */
-struct redfish_link {
-	const char *odata_id;
-};
-static const struct json_obj_descr link_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_link, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-};
-
-/* odata value */
-struct redfish_odata_value {
-	const char *name;
-	const char *kind;
-	const char *url;
-};
-static const struct json_obj_descr odata_value_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "name",
-				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "kind",
-				  kind, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "url",
-				  url, JSON_TOK_STRING),
-};
-
-/* odata */
-struct redfish_odata {
-	const char *odata_context;
-	size_t value_count;
-	struct redfish_odata_value value[4];
-};
-static const struct json_obj_descr odata_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata, "@odata.context",
-				  odata_context, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_odata, "value", value,
-		       4, value_count, odata_value_descr, ARRAY_SIZE(odata_value_descr)),
-};
-
-/* Service Root response */
-struct redfish_service_root {
-	const char *odata_type;
-	const char *odata_id;
-	const char *id;
-	const char *name;
-	const char *redfish_version;
-	const char *uuid;
-	struct redfish_link account_service;
-	struct redfish_link systems;
-	struct redfish_link managers;
-};
-static const struct json_obj_descr service_root_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
-				  odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Id",
-				  id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Name",
-				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "RedfishVersion",
-				  redfish_version, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "UUID",
-				  uuid, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "AccountService",
-				    account_service, link_descr),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Managers",
-				    managers, link_descr),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
-				    systems, link_descr),
-};
-
-/* Account Service */
-struct redfish_account_service {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *name;
-	struct redfish_link accounts;
-};
-static const struct json_obj_descr account_service_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.id", odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.type", odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Id", id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Name", name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_account_service, "Accounts", accounts, link_descr),
-};
-
-/* Account */
-struct redfish_account {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *role_id;
-	const char *name;
-	const char *user_name;
-	const char *password; // Write-only
-};
-static const struct json_obj_descr account_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.type", odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Id", id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "RoleId", role_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Name", name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
-	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING),
-};
-
-/* DHCPv4 */
-struct redfish_dhcp_v4 {
-	bool dhcp_enabled;
-};
-static const struct json_obj_descr dhcp_v4_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_dhcp_v4, "DHCPEnabled", dhcp_enabled, JSON_TOK_TRUE),
-};
-
-/* IPv4Address */
-struct redfish_ipv4_addr {
-	const char *address;
-	const char *subnet_mask;
-	const char *gateway;
-	const char *address_origin;
-};
-static const struct json_obj_descr ipv4_addr_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Address", address, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "SubnetMask", subnet_mask, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Gateway", gateway, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "AddressOrigin", address_origin, JSON_TOK_STRING),
-};
-
-/* EthInterface */
-struct redfish_ethernet_interface {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *name;
-	const char *host_name;
-	struct redfish_dhcp_v4 dhcp_v4;
-	struct redfish_ipv4_addr ipv4_addresses[1];
-	size_t ipv4_count;
-	struct redfish_ipv4_addr ipv4_static_addresses[1];
-	size_t ipv4_static_count;
-};
-static const struct json_obj_descr ethernet_interface_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.id", odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.type", odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Id", id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Name", name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "HostName", host_name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_ethernet_interface, "DHCPv4", dhcp_v4, dhcp_v4_descr),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses,
-		       1, ipv4_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
-	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4StaticAddresses", ipv4_static_addresses,
-		       1, ipv4_static_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
-};
-
-struct redfish_ntp {
-	bool protocol_enabled;
-	const char *ntp_servers[1];
-	size_t ntp_servers_count;
-};
-static const struct json_obj_descr ntp_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ntp , "ProtocolEnabled", protocol_enabled, JSON_TOK_TRUE),
-	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_ntp , "NTPServers", ntp_servers, 1, ntp_servers_count, JSON_TOK_STRING),
-};
-
-/* NetworkProtocol */
-struct redfish_network_protocol {
-	const char *odata_type;
-	const char *id;
-	struct redfish_ntp ntp;
-};
-static const struct json_obj_descr network_protocol_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "@odata.type", odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "Id", id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_network_protocol, "NTP", ntp, ntp_descr),
-};
-
-/* Manager */
-struct redfish_manager {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *name;
-	const char *uuid;
-	const char *date_time;
-	struct redfish_link ethernet_interfaces;
-};
-static const struct json_obj_descr manager_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.id", odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.type", odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Id", id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Name", name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "UUID", uuid, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "DateTime", date_time, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "EthernetInterfaces", ethernet_interfaces, link_descr),
-};
-
-/* System Info: ResetType array */
-struct redfish_reset_action {
-	const char *target;
-	const char *reset_type_values[3];
-	size_t reset_type_values_len;
-};
-static const struct json_obj_descr reset_action_descr[] = {
-	JSON_OBJ_DESCR_PRIM(struct redfish_reset_action, target, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_reset_action,
-				   "ResetType@Redfish.AllowableValues",
-				   reset_type_values, 3, reset_type_values_len,
-				   JSON_TOK_STRING),
-};
-
-/* System Info: Actions nested object */
-struct redfish_actions {
-	struct redfish_reset_action reset_action;
-};
-static const struct json_obj_descr actions_descr[] = {
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_actions, "#ComputerSystem.Reset",
-				    reset_action, reset_action_descr),
-};
-
-/* System Info: ProcessorSummary nested object */
-struct redfish_processor_summary {
-	const char *odata_type;
-	int32_t count;
-	const char *model;
-};
-static const struct json_obj_descr processor_summary_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
-				  count, JSON_TOK_NUMBER),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Model",
-				  model, JSON_TOK_STRING),
-};
-
-/* System Info: MemorySummary nested object */
-struct redfish_memory_summary {
-	int32_t total_system_GiB;
-};
-static const struct json_obj_descr memory_summary_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_memory_summary, "TotalSystemMemoryGiB",
-				  total_system_GiB, JSON_TOK_NUMBER),
-};
-
-/* System Info response */
-struct redfish_computer_system {
-	const char *odata_id;
-	const char *odata_type;
-	const char *id;
-	const char *uuid;
-	const char *name;
-	const char *manufacturer;
-	const char *model;
-	const char *host_name;
-	const char *power_restore_policy;
-	const char *power_state;
-	const char *serial_number;
-	struct redfish_processor_summary processor_summary;
-	struct redfish_memory_summary memory_summary;
-	struct redfish_actions actions;
-};
-static const struct json_obj_descr computer_system_descr[] = {
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
-				  odata_id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.type",
-				  odata_type, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Id",
-				  id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "UUID",
-				  uuid, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
-				  name, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Manufacturer",
-				  manufacturer, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
-				  model, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerRestorePolicy",
-				  power_restore_policy, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
-				  power_state, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
-				  serial_number, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "ProcessorSummary",
-				    processor_summary, processor_summary_descr),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "MemorySummary",
-				    memory_summary, memory_summary_descr),
-	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
-				    actions, actions_descr),
-};
 
 /*** Redfish HTTP handlers ***/
 
@@ -640,6 +297,63 @@ static const struct http_resource_detail_dynamic name##_detail = {			\
 };											\
 ALL_HTTP_RESOURCE_DEFINE(name, url, &name##_detail);
 
+/*** Core Redfish types/containers ***/
+
+/* Collection: Member nested object */
+struct redfish_member {
+	const char *odata_id;
+};
+static const struct json_obj_descr member_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_member, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+};
+
+#define REDFISH_COLLECTION_MEMBERS_MAX 1
+
+/* Collection of members */
+struct redfish_collection {
+	const char *odata_id;
+	const char *odata_type;
+	const char *name;
+	int32_t members_count;
+	size_t members_len;
+	struct redfish_member members[REDFISH_COLLECTION_MEMBERS_MAX];
+};
+static const struct json_obj_descr collection_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_collection,
+				  "Members@odata.count", members_count,
+				  JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_collection,
+				       "Members", members,
+				       REDFISH_COLLECTION_MEMBERS_MAX, members_len,
+				       member_descr, ARRAY_SIZE(member_descr)),
+};
+
+/* Link (nested by others) */
+struct redfish_link {
+	const char *odata_id;
+};
+static const struct json_obj_descr link_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_link, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+};
+
+
+/*** /redfish/ ***/
+struct redfish_version {
+	const char *v1;
+};
+static const struct json_obj_descr version_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_version, "v1",
+				  v1, JSON_TOK_STRING),
+};
+
 /* GET /redfish/ */
 static int redfish_version_get_handler(char *out_buf, size_t out_buf_len)
 {
@@ -655,6 +369,39 @@ REDFISH_HANDLER(redfish_version, "/redfish/",
 		false, /* do not require auth */
 		redfish_version_get_handler, NULL, NULL);
 ALL_HTTP_RESOURCE_DEFINE(redfish_version_no_slash, "/redfish", &redfish_version_detail);
+
+/*** /redfish/v1/ ***/
+struct redfish_service_root {
+	const char *odata_type;
+	const char *odata_id;
+	const char *id;
+	const char *name;
+	const char *redfish_version;
+	const char *uuid;
+	struct redfish_link account_service;
+	struct redfish_link systems;
+	struct redfish_link managers;
+};
+static const struct json_obj_descr service_root_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "RedfishVersion",
+				  redfish_version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "UUID",
+				  uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "AccountService",
+				    account_service, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Managers",
+				    managers, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
+				    systems, link_descr),
+};
 
 /* GET /redfish/v1/ */
 static int service_root_get_handler(char *out_buf, size_t out_buf_len)
@@ -693,6 +440,37 @@ REDFISH_HANDLER(service_root, "/redfish/v1/",
 		service_root_get_handler, NULL, NULL);
 ALL_HTTP_RESOURCE_DEFINE(service_root_no_slash, "/redfish/v1", &service_root_detail);
 
+
+/*** /redfish/v1/odata ***/
+struct redfish_odata_value {
+	const char *name;
+	const char *kind;
+	const char *url;
+};
+static const struct json_obj_descr odata_value_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "kind",
+				  kind, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata_value, "url",
+				  url, JSON_TOK_STRING),
+};
+
+#define REDFISH_ODATA_VALUES_MAX 4
+
+struct redfish_odata {
+	const char *odata_context;
+	size_t value_count;
+	struct redfish_odata_value value[REDFISH_ODATA_VALUES_MAX];
+};
+static const struct json_obj_descr odata_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_odata, "@odata.context",
+				  odata_context, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_odata, "value", value,
+				       REDFISH_ODATA_VALUES_MAX, value_count,
+				       odata_value_descr, ARRAY_SIZE(odata_value_descr)),
+};
+
 /* GET /redfish/v1/odata */
 static int odata_get_handler(char *out_buf, size_t out_buf_len)
 {
@@ -721,6 +499,22 @@ static int odata_get_handler(char *out_buf, size_t out_buf_len)
 REDFISH_HANDLER(odata, "/redfish/v1/odata",
 		false, /* do not require auth */
 		odata_get_handler, NULL, NULL);
+
+/*** /redfish/v1/AccountService ***/
+struct redfish_account_service {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	struct redfish_link accounts;
+};
+static const struct json_obj_descr account_service_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account_service, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_account_service, "Accounts", accounts, link_descr),
+};
 
 /* GET /redfish/v1/AccountService */
 static int account_service_get_handler(char *out_buf, size_t out_buf_len)
@@ -781,6 +575,27 @@ REDFISH_HANDLER(accounts_collection, "/redfish/v1/AccountService/Accounts",
 		true, /* require auth */
 		accounts_collection_get_handler, NULL, NULL);
 
+/*** /redfish/v1/AccountService/Account/1 ***/
+struct redfish_account {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *role_id;
+	const char *name;
+	const char *user_name;
+	const char *password; // Write-only
+};
+static const struct json_obj_descr account_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "RoleId", role_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
+	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING),
+};
+
 /* PATCH /redfish/v1/AccountService/Account/1 */
 static int account_patch_handler(char *in_buf, size_t in_buf_len)
 {
@@ -836,7 +651,8 @@ REDFISH_HANDLER(account, "/redfish/v1/AccountService/Accounts/1",
 		true, /* require auth */
 		account_get_handler, account_patch_handler, NULL);
 
-/* Managers Collection: GET /redfish/v1/Managers */
+/*** /redfish/v1/Managers ***/
+/* GET /redfish/v1/Managers */
 static int managers_collection_get_handler(char *out_buf, size_t out_buf_len)
 {
 	const struct redfish_collection managers_collection = {
@@ -866,6 +682,26 @@ static int managers_collection_get_handler(char *out_buf, size_t out_buf_len)
 REDFISH_HANDLER(managers_collection, "/redfish/v1/Managers",
 		true, /* require auth */
 		managers_collection_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Managers/bmc ***/
+struct redfish_manager {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	const char *uuid;
+	const char *date_time;
+	struct redfish_link ethernet_interfaces;
+};
+static const struct json_obj_descr manager_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "UUID", uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "DateTime", date_time, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "EthernetInterfaces", ethernet_interfaces, link_descr),
+};
 
 static const char *get_iso_time(void)
 {
@@ -933,6 +769,7 @@ REDFISH_HANDLER(manager, "/redfish/v1/Managers/bmc",
 		true, /* require auth */
 		manager_get_handler, manager_patch_handler, NULL);
 
+/*** /redfish/v1/Managers/bmc/EthernetInterfaces ***/
 /* GET /redfish/v1/Managers/bmc/EthernetInterfaces */
 static int ethernet_collection_get_handler(char *out_buf, size_t out_buf_len)
 {
@@ -964,6 +801,56 @@ REDFISH_HANDLER(ethernet_interfaces, "/redfish/v1/Managers/bmc/EthernetInterface
 		true, /* require auth */
 		ethernet_collection_get_handler, NULL, NULL);
 
+/*** /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 ***/
+/* DHCPv4 */
+struct redfish_dhcp_v4 {
+	bool dhcp_enabled;
+};
+static const struct json_obj_descr dhcp_v4_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_dhcp_v4, "DHCPEnabled", dhcp_enabled, JSON_TOK_TRUE),
+};
+
+/* IPv4Address */
+struct redfish_ipv4_addr {
+	const char *address;
+	const char *subnet_mask;
+	const char *gateway;
+	const char *address_origin;
+};
+static const struct json_obj_descr ipv4_addr_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Address", address, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "SubnetMask", subnet_mask, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "Gateway", gateway, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ipv4_addr, "AddressOrigin", address_origin, JSON_TOK_STRING),
+};
+
+/* EthInterface */
+struct redfish_ethernet_interface {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	const char *host_name;
+	struct redfish_dhcp_v4 dhcp_v4;
+	struct redfish_ipv4_addr ipv4_addresses[1];
+	size_t ipv4_count;
+	struct redfish_ipv4_addr ipv4_static_addresses[1];
+	size_t ipv4_static_count;
+};
+static const struct json_obj_descr ethernet_interface_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ethernet_interface, "HostName", host_name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_ethernet_interface, "DHCPv4", dhcp_v4, dhcp_v4_descr),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4Addresses", ipv4_addresses,
+		       1, ipv4_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_ethernet_interface, "IPv4StaticAddresses", ipv4_static_addresses,
+		       1, ipv4_static_count, ipv4_addr_descr, ARRAY_SIZE(ipv4_addr_descr)),
+};
+
+/* PATCH /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
 static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 {
 	struct redfish_ethernet_interface payload;
@@ -1091,6 +978,29 @@ REDFISH_HANDLER(ethernet, "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
 		true, /* require auth */
 		ethernet_get_handler, ethernet_patch_handler, NULL);
 
+/*** /redfish/v1/Managers/bmc/NetworkProtocol ***/
+struct redfish_ntp {
+	bool protocol_enabled;
+	const char *ntp_servers[1];
+	size_t ntp_servers_count;
+};
+static const struct json_obj_descr ntp_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_ntp , "ProtocolEnabled", protocol_enabled, JSON_TOK_TRUE),
+	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_ntp , "NTPServers", ntp_servers, 1, ntp_servers_count, JSON_TOK_STRING),
+};
+
+/* NetworkProtocol */
+struct redfish_network_protocol {
+	const char *odata_type;
+	const char *id;
+	struct redfish_ntp ntp;
+};
+static const struct json_obj_descr network_protocol_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_network_protocol, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_network_protocol, "NTP", ntp, ntp_descr),
+};
+
 /* PATCH /redfish/v1/Managers/bmc/NetworkProtocol */
 static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
 {
@@ -1155,6 +1065,7 @@ REDFISH_HANDLER(network_protocol, "/redfish/v1/Managers/bmc/NetworkProtocol",
 		true, /* require auth */
 		network_protocol_get_handler, network_protocol_patch_handler, NULL);
 
+/*** /redfish/v1/Systems ***/
 /* GET /redfish/v1/Systems */
 static int systems_collection_get_handler(char *out_buf, size_t out_buf_len)
 {
@@ -1185,6 +1096,99 @@ static int systems_collection_get_handler(char *out_buf, size_t out_buf_len)
 REDFISH_HANDLER(systems_collection, "/redfish/v1/Systems",
 		true, /* require auth */
 		systems_collection_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Systems/system ***/
+static char serial_number[] = "12345";
+
+/* System Info: ResetType array */
+struct redfish_reset_action {
+	const char *target;
+	const char *reset_type_values[3];
+	size_t reset_type_values_len;
+};
+static const struct json_obj_descr reset_action_descr[] = {
+	JSON_OBJ_DESCR_PRIM(struct redfish_reset_action, target, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_reset_action,
+				   "ResetType@Redfish.AllowableValues",
+				   reset_type_values, 3, reset_type_values_len,
+				   JSON_TOK_STRING),
+};
+
+/* System Info: Actions nested object */
+struct redfish_actions {
+	struct redfish_reset_action reset_action;
+};
+static const struct json_obj_descr actions_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_actions, "#ComputerSystem.Reset",
+				    reset_action, reset_action_descr),
+};
+
+/* System Info: ProcessorSummary nested object */
+struct redfish_processor_summary {
+	const char *odata_type;
+	int32_t count;
+	const char *model;
+};
+static const struct json_obj_descr processor_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Count",
+				  count, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_processor_summary, "Model",
+				  model, JSON_TOK_STRING),
+};
+
+/* System Info: MemorySummary nested object */
+struct redfish_memory_summary {
+	int32_t total_system_GiB;
+};
+static const struct json_obj_descr memory_summary_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_memory_summary, "TotalSystemMemoryGiB",
+				  total_system_GiB, JSON_TOK_NUMBER),
+};
+
+struct redfish_computer_system {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *uuid;
+	const char *name;
+	const char *manufacturer;
+	const char *model;
+	const char *host_name;
+	const char *power_restore_policy;
+	const char *power_state;
+	const char *serial_number;
+	struct redfish_processor_summary processor_summary;
+	struct redfish_memory_summary memory_summary;
+	struct redfish_actions actions;
+};
+static const struct json_obj_descr computer_system_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "UUID",
+				  uuid, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Manufacturer",
+				  manufacturer, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
+				  model, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerRestorePolicy",
+				  power_restore_policy, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
+				  power_state, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
+				  serial_number, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "ProcessorSummary",
+				    processor_summary, processor_summary_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "MemorySummary",
+				    memory_summary, memory_summary_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
+				    actions, actions_descr),
+};
 
 /* PATCH /redfish/v1/Systems/system */
 static int system_patch_handler(char *in_buf, size_t in_buf_len)
@@ -1268,6 +1272,14 @@ REDFISH_HANDLER(system, "/redfish/v1/Systems/system",
 		true, /* require auth */
 		system_get_handler, system_patch_handler, NULL);
 
+struct redfish_reset_payload {
+	const char *reset_type;
+};
+static const struct json_obj_descr reset_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_reset_payload, "ResetType",
+				  reset_type, JSON_TOK_STRING)
+};
+
 /* POST /redfish/v1/Systems/system/Actions/ComputerSystem.Reset */
 static int system_reset_post_handler(char *in_buf, size_t in_buf_len)
 {
@@ -1301,7 +1313,7 @@ REDFISH_HANDLER(system_reset, "/redfish/v1/Systems/system/Actions/ComputerSystem
 		true, /* require auth */
 		NULL, NULL, system_reset_post_handler);
 
-/* Static metadata */
+/*** /redfish/v1/$metadata ***/
 static const uint8_t redfish_metadata_xml_gz[] = {
 #include "redfish_metadata.xml.gz.inc"
 };
