@@ -144,6 +144,38 @@ config REDFISH
 	select JSON_LIBRARY
 	select BASE64
 
+if REDFISH
+
+config REDFISH_SYSTEM_PRODUCT_NAME
+	string "Redfish system product / board display name"
+	default "WallaBMC Board"
+	help
+	  Shown as System Name in Redfish and in the dashboard System Overview.
+
+config REDFISH_SYSTEM_MANUFACTURER
+	string "Redfish system manufacturer"
+	default "WallaBMC"
+
+config REDFISH_SYSTEM_MODEL
+	string "Redfish system model"
+	default "Generic"
+
+config REDFISH_SYSTEM_PROCESSOR_MODEL
+	string "Redfish processor summary model"
+	default "N/A"
+
+config REDFISH_SYSTEM_PROCESSOR_COUNT
+	int "Redfish processor summary count"
+	default 1
+
+config REDFISH_SYSTEM_MEMORY_GIB
+	int "Redfish memory summary total (GiB)"
+	default 0
+	help
+	  Total system memory in GiB for Redfish MemorySummary. 0 shows as N/A.
+
+endif # REDFISH
+
 config APP_WEB
 	bool "Web server"
 	default y

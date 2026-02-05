@@ -329,7 +329,7 @@
 				</div>
 
 				<div class="grid-3-col">
-					<div class="info-item"><label>Name</label><span class="data-value" id="sys-name">Loading...</span></div>
+					<div class="info-item"><label>Board</label><span class="data-value" id="sys-name">Loading...</span></div>
 					<div class="info-item"><label>Manufacturer</label><span class="data-value" id="sys-manufacturer">Loading...</span></div>
 					<div class="info-item"><label>Model</label><span class="data-value" id="sys-model">Loading...</span></div>
 					<div class="info-item"><label>Serial</label><span class="data-value" id="sys-serial">Loading...</span></div>
@@ -627,7 +627,8 @@
 			setText('sys-name', sysData.Name);
 			setText('sys-manufacturer', sysData.Manufacturer);
 			setText('sys-model', sysData.Model);
-			setText('sys-memory', sysData.MemorySummary ? `${sysData.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
+			setText('sys-memory', sysData.MemorySummary && sysData.MemorySummary.TotalSystemMemoryGiB
+				? `${sysData.MemorySummary.TotalSystemMemoryGiB} GiB` : 'N/A');
 			setText('sys-cpu', sysData.ProcessorSummary ? sysData.ProcessorSummary.Count : 'N/A');
 			setText('sys-cpu-model', sysData.ProcessorSummary ? sysData.ProcessorSummary.Model : 'N/A');
 
