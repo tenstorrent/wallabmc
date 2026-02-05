@@ -243,7 +243,7 @@ config PERSISTENT_STORAGE
 
 config JTAG
 	bool "JTAG support"
-	depends on $(dt_path_enabled,'/jtag')
+	depends on $(dt_path_enabled,/jtag)
 	default y
 
 if JTAG
