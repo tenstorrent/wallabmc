@@ -880,10 +880,24 @@ static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 		config_bmc_use_dhcp4_set(payload.dhcp_v4.dhcp_enabled);
 
 	if (payload.ipv4_static_count != -1) {
-		/* If count is 0 then the address will be 0 (which clears the static IP) */
-		ret = config_bmc_default_ip4_set(payload.ipv4_static_addresses[0].address);
+		struct redfish_ipv4_addr *redfish_static_addr = &payload.ipv4_static_addresses[0];
+
+		/* If count is 0 then the addresses will be 0 (which clears the static IP) */
+		ret = config_bmc_default_ip4_set(redfish_static_addr->address);
 		if (ret) {
 			LOG_ERR("Failed to set static IP address (err=%d)", ret);
+			return HTTP_500_INTERNAL_SERVER_ERROR;
+		}
+
+		ret = config_bmc_default_ip4_nm_set(redfish_static_addr->subnet_mask);
+		if (ret) {
+			LOG_ERR("Failed to set static IP subnet mask address (err=%d)", ret);
+			return HTTP_500_INTERNAL_SERVER_ERROR;
+		}
+
+		ret = config_bmc_default_ip4_gw_set(redfish_static_addr->gateway);
+		if (ret) {
+			LOG_ERR("Failed to set static IP gateway address (err=%d)", ret);
 			return HTTP_500_INTERNAL_SERVER_ERROR;
 		}
 	}
@@ -955,13 +969,26 @@ static int ethernet_get_handler(char *out_buf, size_t out_buf_len)
 		}
 	}
 
-	char static_ip_str[NET_IPV4_ADDR_LEN];
 	if (config_bmc_default_ip4()) {
-		uint32_t addr = config_bmc_default_ip4();
+		struct redfish_ipv4_addr *redfish_static_addr = &ethernet_interface.ipv4_static_addresses[0];
+		char static_ip_str[NET_IPV4_ADDR_LEN];
+		char static_nm_str[NET_IPV4_ADDR_LEN];
+		char static_gw_str[NET_IPV4_ADDR_LEN];
+		uint32_t addr;
+
 		ethernet_interface.ipv4_static_count = 1,
+
+		addr = config_bmc_default_ip4();
 		net_addr_ntop(AF_INET, &addr, static_ip_str, sizeof(static_ip_str));
-		ethernet_interface.ipv4_static_addresses[0].address = static_ip_str;
-		ethernet_interface.ipv4_static_addresses[0].subnet_mask = "255.255.255.0"; /* XXX: configure? */
+		redfish_static_addr->address = static_ip_str;
+
+		addr = config_bmc_default_ip4_nm();
+		net_addr_ntop(AF_INET, &addr, static_nm_str, sizeof(static_nm_str));
+		redfish_static_addr->subnet_mask = static_nm_str;
+
+		addr = config_bmc_default_ip4_gw();
+		net_addr_ntop(AF_INET, &addr, static_gw_str, sizeof(static_gw_str));
+		redfish_static_addr->gateway = static_gw_str;
 	}
 
 	ret = json_obj_encode_buf(ethernet_interface_descr, ARRAY_SIZE(ethernet_interface_descr),
