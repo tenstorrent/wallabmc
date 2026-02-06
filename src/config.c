@@ -658,54 +658,27 @@ int config_init(void)
 		config_data.version = FS_CONFIG_VERSION;
 	}
 
-	if (IS_ONDISK(bmc_hostname)) {
-		rc = net_do_set_hostname(config_data.bmc_hostname);
-		if (rc) {
-			LOG_ERR("Config: could not set hostname to %s", config_data.bmc_hostname);
-			return rc;
-		}
-		LOG_INF("BMC hostname set to %s", config_data.bmc_hostname);
-	} else {
-		/* This defaults to CONFIG_NET_HOSTNAME */
+	if (!IS_ONDISK(bmc_hostname)) {
+		/* Default to CONFIG_NET_HOSTNAME */
 		strncpy(config_data.bmc_hostname, net_hostname_get(), MAX_HOSTNAME_LEN);
 	}
 
-	if (IS_ONDISK(bmc_use_dhcp4))
-		LOG_INF("BMC DHCPv4: %s", config_data.bmc_use_dhcp4 ? "enabled" : "disabled");
-	else
-		config_data.bmc_use_dhcp4 = 1; /* Default to enabled */
+	if (!IS_ONDISK(bmc_use_dhcp4))
+		config_data.bmc_use_dhcp4 = 1;
 
-	if (IS_ONDISK(bmc_default_ip4)) {
-		if (config_data.bmc_default_ip4) {
-			rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
-			if (rc) {
-				LOG_ERR("Config: could not set default IPv4");
-				return rc;
-			}
-			LOG_INF("BMC default IPv4 set to %s", config_default_ip4_string());
-		}
-	} else {
-		config_data.bmc_default_ip4 = 0; /* Default to not set */
-	}
+	if (!IS_ONDISK(bmc_default_ip4))
+		config_data.bmc_default_ip4 = 0;
 
-	if (IS_ONDISK(host_auto_poweron))
-		LOG_INF("Host auto-poweron: %s", config_data.host_auto_poweron ? "enabled" : "disabled");
-	else
-		config_data.host_auto_poweron = 0; /* Default to disabled */
+	if (!IS_ONDISK(host_auto_poweron))
+		config_data.host_auto_poweron = 0;
 
-	if (!IS_ONDISK(bmc_admin_password)) {
-		/* This defaults to "admin" */
+	if (!IS_ONDISK(bmc_admin_password))
 		strncpy(config_data.bmc_admin_password, "admin", MAX_PW_LEN);
-	}
 
-	if (IS_ONDISK(bmc_use_ntp))
-		LOG_INF("BMC NTP: %s", config_data.bmc_use_dhcp4 ? "enabled" : "disabled");
-	else
-		config_data.bmc_use_ntp = 1; /* Default to enabled */
+	if (!IS_ONDISK(bmc_use_ntp))
+		config_data.bmc_use_ntp = 1;
 
-	if (IS_ONDISK(bmc_ntp_server))
-		LOG_INF("BMC NTP server: %s", config_data.bmc_ntp_server);
-	else
+	if (!IS_ONDISK(bmc_ntp_server))
 		strncpy(config_data.bmc_ntp_server, "pool.ntp.org", MAX_NTP_SERVER_LEN);
 #undef IS_ONDISK
 
