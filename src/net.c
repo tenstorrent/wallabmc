@@ -31,9 +31,11 @@ int net_do_set_hostname(const char *hostname)
 		return rc;
 	}
 
-	rc = restart_dhcp4();
-	if (rc) {
-		return rc;
+	if (config_bmc_use_dhcp4()) {
+		rc = restart_dhcp4();
+		if (rc) {
+			return rc;
+		}
 	}
 
 	return rc;
