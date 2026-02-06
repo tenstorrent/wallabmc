@@ -9,9 +9,13 @@ config APP_DNS_RESOLVE
 	select DNS_RESOLVER
 	select NET_DHCPV4_OPTION_DNS_ADDRESS
 	# If DHCP is not enabled, then need these. For now, DNS/NTP
-	# requires DHCP.
-	#CONFIG_DNS_SERVER_IP_ADDRESSES=y
-	#CONFIG_DNS_SERVER1="192.168.0.1"
+	# requires DHCP. Could make DNS configurable.
+	select DNS_SERVER_IP_ADDRESSES
+	select DNS_RECONFIGURE_CLEANUP
+
+config DNS_SERVER1
+	string
+	default "1.1.1.1" if APP_DNS_RESOLVE
 
 config APP_NTP
 	bool "NTP time synchronisation"

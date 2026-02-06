@@ -16,6 +16,7 @@ LOG_MODULE_REGISTER(wallabmc_net, LOG_LEVEL_INF);
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_context.h>
 #include <zephyr/net/net_mgmt.h>
+#include <zephyr/net/dns_resolve.h>
 
 #include "net.h"
 #include "dhcp.h"
@@ -125,6 +126,14 @@ int net_stop_dhcp4(void)
 	rc = net_do_set_default_ip4_from_config();
 	if (rc)
 		LOG_ERR("Cannot reset IPv4 address (err=%d)", rc);
+
+#ifdef CONFIG_APP_DNS_RESOLVE
+	static const char *dns_servers[] = { CONFIG_DNS_SERVER1, NULL };
+	rc = dns_resolve_reconfigure(dns_resolve_get_default(), dns_servers,
+					NULL, DNS_SOURCE_MANUAL);
+	if (rc)
+		LOG_ERR("Cannot reset DNS resolver (err=%d)", rc);
+#endif
 
 	return 0;
 }
