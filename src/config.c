@@ -257,38 +257,45 @@ static int cmd_config_bmc_hostname(const struct shell *sh, size_t argc, char **a
 	return 0;
 }
 
-static const char *config_default_ip4_string(void)
+/* Not reentrant, don't use outside config.c */
+static const char *ip4_atos(uint32_t a)
 {
-	static char default_ip4_str[INET_ADDRSTRLEN];
+	static char ip4_str[INET_ADDRSTRLEN];
 	static struct in_addr addr;
 
-	addr.s_addr = config_data.bmc_default_ip4;
+	addr.s_addr = a;
 
-	if (inet_ntop(AF_INET, &addr, default_ip4_str, sizeof(default_ip4_str)) == NULL) {
-		LOG_ERR("Could not convert IPv4 address 0x%08x to str", config_data.bmc_default_ip4);
+	if (inet_ntop(AF_INET, &addr, ip4_str, sizeof(ip4_str)) == NULL) {
+		LOG_ERR("Could not convert IPv4 address 0x%08x to str", a);
 		return NULL;
 	}
 
-	return default_ip4_str;
+	return ip4_str;
+}
+
+/* Not reentrant, don't use outside config.c */
+static uint32_t ip4_stoa(const char *str)
+{
+	static struct in_addr addr;
+	int rc;
+
+	rc = inet_pton(AF_INET, str, &addr);
+	if (rc != 1) {
+		LOG_ERR("Could not convert IPv4 address %s in_addr", str);
+		return -EINVAL;
+	}
+
+	return addr.s_addr;
 }
 
 int config_bmc_default_ip4_set(const char *str)
 {
 	int rc;
 
-	if (str) {
-		static struct in_addr addr;
-
-		rc = inet_pton(AF_INET, str, &addr);
-		if (rc != 1) {
-			LOG_ERR("Could not convert IPv4 address %s in_addr", str);
-			return -EINVAL;
-		}
-
-		config_data.bmc_default_ip4 = addr.s_addr;
-	} else {
+	if (str)
+		config_data.bmc_default_ip4 = ip4_stoa(str);
+	else
 		config_data.bmc_default_ip4 = 0;
-	}
 
 	/* Default address gets removed if this is */
 	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
@@ -586,7 +593,7 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "--- Configuration ---");
 	shell_print(sh, "Version: %d",		config_data.version);
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
-	shell_print(sh, "BMC default IPv4: %s", config_default_ip4_string());
+	shell_print(sh, "BMC default IPv4: %s", ip4_atos(config_data.bmc_default_ip4));
 	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
 	shell_print(sh, "BMC use NTP: %d",	config_data.bmc_use_ntp);
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
