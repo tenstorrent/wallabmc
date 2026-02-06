@@ -50,6 +50,8 @@ struct config_data {
 	char bmc_admin_password[MAX_PW_LEN + 1]; /* NULL terminated */
 	uint8_t bmc_use_ntp;
 	char bmc_ntp_server[MAX_NTP_SERVER_LEN + 1]; /* NULL terminated */
+	uint32_t bmc_default_ip4_nm;
+	uint32_t bmc_default_ip4_gw;
 } __packed;
 
 /*
@@ -66,6 +68,16 @@ static struct config_data config_data;
 uint32_t config_bmc_default_ip4(void)
 {
 	return config_data.bmc_default_ip4;
+}
+
+uint32_t config_bmc_default_ip4_nm(void)
+{
+	return config_data.bmc_default_ip4_nm;
+}
+
+uint32_t config_bmc_default_ip4_gw(void)
+{
+	return config_data.bmc_default_ip4_gw;
 }
 
 bool config_bmc_use_dhcp4(void)
@@ -295,10 +307,9 @@ int config_bmc_default_ip4_set(const char *str)
 	if (str)
 		config_data.bmc_default_ip4 = ip4_stoa(str);
 	else
-		config_data.bmc_default_ip4 = 0;
+		config_data.bmc_default_ip4 = 0; /* Remove default addr */
 
-	/* Default address gets removed if this is */
-	rc = net_do_set_default_ip4(config_data.bmc_default_ip4);
+	rc = net_do_set_default_ip4_from_config();
 	if (rc) {
 		LOG_ERR("Could not apply BMC default IPv4 address (err=%d)", rc);
 		return rc;
@@ -313,9 +324,57 @@ int config_bmc_default_ip4_set(const char *str)
 	return 0;
 }
 
+int config_bmc_default_ip4_nm_set(const char *str)
+{
+	int rc;
+
+	if (str)
+		config_data.bmc_default_ip4_nm = ip4_stoa(str);
+	else
+		config_data.bmc_default_ip4_nm = 0;
+
+	rc = net_do_set_default_ip4_from_config();
+	if (rc) {
+		LOG_ERR("Could not apply BMC default IPv4 subnet mask address (err=%d)", rc);
+		return rc;
+	}
+
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+int config_bmc_default_ip4_gw_set(const char *str)
+{
+	int rc;
+
+	if (str)
+		config_data.bmc_default_ip4_gw = ip4_stoa(str);
+	else
+		config_data.bmc_default_ip4_gw = 0;
+
+	rc = net_do_set_default_ip4_from_config();
+	if (rc) {
+		LOG_ERR("Could not apply BMC default IPv4 gateway address (err=%d)", rc);
+		return rc;
+	}
+
+	rc = write_config();
+	if (rc < 0) {
+		LOG_ERR("Configuration could not be saved (err=%d)", rc);
+		return rc;
+	}
+
+	return 0;
+}
+
 #define CMD_HELP_BMC_DEFAULT_IP4		\
 	"Configure BMC default IPv4 address\n"	\
-	"Usage: bmc ipv4_addr <IPv4 address>"
+	"Usage: bmc ipv4_address <IPv4 address>"
 
 static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char **argv)
 {
@@ -335,6 +394,58 @@ static int cmd_config_bmc_default_ip4(const struct shell *sh, size_t argc, char 
 	}
 
 	shell_info(sh, "BMC default IPv4 address set to %s", argv[1]);
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_DEFAULT_IP4_NM			\
+	"Configure BMC default IPv4 subnet mask\n"	\
+	"Usage: bmc ipv4_subnet_mask <IPv4 address>"
+
+static int cmd_config_bmc_default_ip4_nm(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	rc = config_bmc_default_ip4_nm_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC default IPv4 subnet mask (err=%d)", rc);
+		return rc;
+	}
+
+	shell_info(sh, "BMC default IPv4 subnet mask set to %s", argv[1]);
+
+	return 0;
+}
+
+#define CMD_HELP_BMC_DEFAULT_IP4_GW			\
+	"Configure BMC default IPv4 gateway\n"	\
+	"Usage: bmc ipv4_gateway <IPv4 address>"
+
+static int cmd_config_bmc_default_ip4_gw(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	rc = config_bmc_default_ip4_gw_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC default IPv4 gateway (err=%d)", rc);
+		return rc;
+	}
+
+	shell_info(sh, "BMC default IPv4 gateway set to %s", argv[1]);
 
 	return 0;
 }
@@ -526,7 +637,9 @@ static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **a
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_bmc_cmds,
 	SHELL_CMD_ARG(password,		NULL, CMD_HELP_BMC_ADMIN_PASSWORD, cmd_config_bmc_password, 2, 0),
 	SHELL_CMD_ARG(hostname,		NULL, CMD_HELP_BMC_HOSTNAME, cmd_config_bmc_hostname, 2, 0),
-	SHELL_CMD_ARG(ipv4_addr,	NULL, CMD_HELP_BMC_DEFAULT_IP4, cmd_config_bmc_default_ip4, 2, 0),
+	SHELL_CMD_ARG(ipv4_address,	NULL, CMD_HELP_BMC_DEFAULT_IP4, cmd_config_bmc_default_ip4, 2, 0),
+	SHELL_CMD_ARG(ipv4_subnet_mask,	NULL, CMD_HELP_BMC_DEFAULT_IP4_NM, cmd_config_bmc_default_ip4_nm, 2, 0),
+	SHELL_CMD_ARG(ipv4_gateway,	NULL, CMD_HELP_BMC_DEFAULT_IP4_GW, cmd_config_bmc_default_ip4_gw, 2, 0),
 	SHELL_CMD_ARG(dhcpv4,		NULL, CMD_HELP_BMC_DHCP4, cmd_config_bmc_dhcp4, 2, 0),
 	SHELL_CMD_ARG(ntp,		NULL, CMD_HELP_BMC_NTP, cmd_config_bmc_ntp, 2, 0),
 	SHELL_CMD_ARG(ntp_server,	NULL, CMD_HELP_BMC_NTP_SERVER, cmd_config_bmc_ntp_server, 2, 0),
@@ -593,9 +706,12 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "--- Configuration ---");
 	shell_print(sh, "Version: %d",		config_data.version);
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
-	shell_print(sh, "BMC default IPv4: %s", ip4_atos(config_data.bmc_default_ip4));
+	shell_print(sh, "BMC default IPv4 address: %s", ip4_atos(config_data.bmc_default_ip4));
+	shell_print(sh, "BMC default IPv4 subnet mask: %s", ip4_atos(config_data.bmc_default_ip4_nm));
+	shell_print(sh, "BMC default IPv4 gateway: %s", ip4_atos(config_data.bmc_default_ip4_gw));
 	shell_print(sh, "BMC use DHCPv4: %d",	config_data.bmc_use_dhcp4);
 	shell_print(sh, "BMC use NTP: %d",	config_data.bmc_use_ntp);
+	shell_print(sh, "BMC NTP server: %s",	config_data.bmc_ntp_server);
 	shell_print(sh, "Host auto poweron: %d", config_data.host_auto_poweron);
 	shell_print(sh, "---------------------");
 
@@ -686,6 +802,12 @@ int config_init(void)
 
 	if (!IS_ONDISK(bmc_ntp_server))
 		strncpy(config_data.bmc_ntp_server, "pool.ntp.org", MAX_NTP_SERVER_LEN);
+
+	if (!IS_ONDISK(bmc_default_ip4_nm))
+		config_data.bmc_default_ip4_nm = 0;
+
+	if (!IS_ONDISK(bmc_default_ip4_gw))
+		config_data.bmc_default_ip4_gw = 0;
 #undef IS_ONDISK
 
 	/* Write back any newly initialised fields. */
