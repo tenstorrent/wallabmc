@@ -88,10 +88,26 @@ int net_do_set_default_ip4(uint32_t ip4_addr)
 	return 0;
 }
 
-int net_init(void)
+int net_start_dhcp4(void)
+{
+	return start_dhcp4();
+}
+
+int net_stop_dhcp4(void)
 {
 	int rc;
+
+	rc = stop_dhcp4();
+	if (rc)
+		return rc;
+
+	return 0;
+}
+
+int net_init(void)
+{
 	uint32_t ip4_addr;
+	int rc;
 
 	ip4_addr = config_bmc_default_ip4();
 	if (ip4_addr) {
@@ -120,7 +136,7 @@ int net_init(void)
 	 * somewhat hacky.
 	 */
 	if (!config_bmc_use_dhcp4()) {
-		if (stop_dhcp4())
+		if (net_stop_dhcp4())
 			LOG_ERR("DHCPv4 stop failed, continuing");
 	}
 

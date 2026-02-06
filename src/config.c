@@ -16,7 +16,6 @@ LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 #include "config.h"
 #include "main.h"
 #include "net.h"
-#include "dhcp.h"
 #include "ntp.h"
 #include "fs.h"
 
@@ -341,12 +340,12 @@ int config_bmc_use_dhcp4_set(bool use)
 		if (config_data.bmc_use_dhcp4 == 1)
 			return 0;
 		config_data.bmc_use_dhcp4 = 1;
-		start_dhcp4();
+		net_start_dhcp4();
 	} else {
 		if (config_data.bmc_use_dhcp4 == 0)
 			return 0;
 		config_data.bmc_use_dhcp4 = 0;
-		stop_dhcp4();
+		net_stop_dhcp4();
 	}
 
 	rc = write_config();
