@@ -744,9 +744,6 @@
 						await redfishCall(ethIdPath, 'PATCH', payloadEth);
 				}
 
-				await refreshSystemData();
-				await refreshConfigData();
-
 				/* New password last after other updates */
 				const newPass = document.getElementById('cfg-password').value;
 				if (newPass) {
@@ -755,6 +752,9 @@
 					document.getElementById('password').value = newPass;
 					await authenticate();
 				}
+
+				await refreshSystemData();
+				await refreshConfigData();
 
 			} catch (err) {
 				alert("Error saving config: " + err.message);
