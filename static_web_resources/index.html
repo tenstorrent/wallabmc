@@ -407,15 +407,19 @@
 
 				<h3>Network</h3>
 				<div class="grid-4-col">
-					<div class="info-item"><label>IP Address</label><span class="data-value" id="bmc-ip-address">Loading...</span></div>
-					<div class="info-item"><label>Subnet Mask</label><span class="data-value" id="bmc-subnet">Loading...</span></div>
-					<div class="info-item"><label>Gateway</label><span class="data-value" id="bmc-gateway">Loading...</span></div>
-					<div class="info-item"><label>Address type</label><span class="data-value" id="bmc-address-type">Loading...</span></div>
-
 					<div class="info-item">
 						<label for="cfg-hostname">Hostname</label>
 						<input type="text" id="cfg-hostname" placeholder="New Hostname">
 					</div>
+					<div class="info-item"><span class="data-value" /></div>
+					<div class="info-item"><span class="data-value" /></div>
+					<div class="info-item"><span class="data-value" /></div>
+
+					<div class="info-item"><label>Address type</label><span class="data-value" id="bmc-address-type">Loading...</span></div>
+					<div class="info-item"><label>IP Address</label><span class="data-value" id="bmc-ip-address">Loading...</span></div>
+					<div class="info-item"><label>Subnet Mask</label><span class="data-value" id="bmc-subnet">Loading...</span></div>
+					<div class="info-item"><label>Gateway</label><span class="data-value" id="bmc-gateway">Loading...</span></div>
+
 					<div class="info-item">
 						<label for="cfg-dhcp">IP Assignment</label>
 						<select id="cfg-dhcp">
@@ -426,6 +430,14 @@
 					<div class="info-item">
 						<label for="cfg-static-ip">Static IP Address</label>
 						<input type="text" id="cfg-static-ip" placeholder="x.x.x.x">
+					</div>
+					<div class="info-item">
+						<label for="cfg-static-netmask">Static IP Subnet Mask</label>
+						<input type="text" id="cfg-static-netmask" placeholder="x.x.x.x">
+					</div>
+					<div class="info-item">
+						<label for="cfg-static-gateway">Static IP Gateway</label>
+						<input type="text" id="cfg-static-gateway" placeholder="x.x.x.x">
 					</div>
 				</div>
 
@@ -676,10 +688,15 @@
 				const isDhcp = ethData.DHCPv4 ? ethData.DHCPv4.DHCPEnabled : false;
 				document.getElementById('cfg-dhcp').value = isDhcp.toString();
 
-				if (ethData.IPv4StaticAddresses && ethData.IPv4StaticAddresses.length > 0)
+				if (ethData.IPv4StaticAddresses && ethData.IPv4StaticAddresses.length > 0) {
 					document.getElementById('cfg-static-ip').value = ethData.IPv4StaticAddresses[0].Address;
-				else
+					document.getElementById('cfg-static-netmask').value = ethData.IPv4StaticAddresses[0].SubnetMask;
+					document.getElementById('cfg-static-gateway').value = ethData.IPv4StaticAddresses[0].Gateway;
+				} else {
 					document.getElementById('cfg-static-ip').value = null;
+					document.getElementById('cfg-static-netmask').value = null;
+					document.getElementById('cfg-static-gateway').value = null;
+				}
 			}
 		}
 
@@ -732,10 +749,17 @@
 						payloadEth.DHCPv4 = { DHCPEnabled: DHCPv4 };
 
 					const IPv4StaticAddress = document.getElementById('cfg-static-ip').value;
+					const IPv4StaticNetmask = document.getElementById('cfg-static-netmask').value;
+					const IPv4StaticGateway = document.getElementById('cfg-static-gateway').value;
 					if (IPv4StaticAddress) {
 						if (ethData.IPv4StaticAddresses.length === 0 ||
-							IPv4StaticAddress != ethData.IPv4StaticAddresses[0].Address)
-							payloadEth.IPv4StaticAddresses = [{ Address: IPv4StaticAddress }];
+							IPv4StaticAddress != ethData.IPv4StaticAddresses[0].Address ||
+							IPv4StaticNetmask != ethData.IPv4StaticAddresses[0].SubnetMask ||
+							IPv4StaticGateway != ethData.IPv4StaticAddresses[0].Gateway)
+							payloadEth.IPv4StaticAddresses = [
+								{ Address: IPv4StaticAddress,
+								  SubnetMask: IPv4StaticNetmask,
+								  Gateway: IPv4StaticGateway } ];
 					} else {
 						if (ethData.IPv4StaticAddresses.length > 0)
 							payloadEth.IPv4StaticAddresses = [];
