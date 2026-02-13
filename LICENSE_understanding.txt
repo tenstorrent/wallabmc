@@ -1,0 +1,93 @@
+Apache 2.0 License Understanding for WallaBMC
+==============================================
+
+This document provides clarification on how the Apache License 2.0 applies to 
+WallaBMC and addresses common questions about its use.
+
+Overview
+--------
+WallaBMC is licensed under the Apache License, Version 2.0 (the "License"). 
+The complete license text is available in the LICENSE file in this repository.
+
+What You Can Do
+---------------
+Under the Apache 2.0 License, you are permitted to:
+
+1. Use: You may use WallaBMC for any purpose, including commercial applications,
+   without paying any licensing fees or royalties to Tenstorrent.
+
+2. Modify: You may modify WallaBMC to suit your needs. You are not required to
+   share your modifications, though we welcome contributions back to the project.
+
+3. Distribute: You may distribute original or modified versions of WallaBMC.
+   When distributing, you must:
+   - Include a copy of the Apache 2.0 License
+   - Include the NOTICE file with required attributions
+   - State any significant changes made to the files
+   - Retain copyright, patent, trademark, and attribution notices
+
+4. Sublicense: You may incorporate WallaBMC into a larger work under your own
+   license terms, provided that you comply with the Apache 2.0 License conditions
+   for the WallaBMC components.
+
+5. Patent Grant: Contributors to WallaBMC grant you a patent license for any
+   patent claims they own that are necessarily infringed by their contributions.
+
+What You Cannot Do
+------------------
+1. Trademark Use: The license does not grant permission to use Tenstorrent's
+   trade names, trademarks, service marks, or product names, except as required
+   for reasonable and customary use in describing the origin of WallaBMC.
+
+2. Remove Notices: You may not remove copyright, patent, trademark, or 
+   attribution notices from WallaBMC source files.
+
+3. Hold Contributors Liable: WallaBMC is provided "AS IS" without warranties.
+   Contributors cannot be held liable for damages arising from the use of 
+   WallaBMC, except as required by applicable law.
+
+Your Responsibilities
+---------------------
+When you distribute WallaBMC or derivative works:
+
+1. License Compliance: Ensure that you include the LICENSE and NOTICE files
+   and comply with all Apache 2.0 License requirements.
+
+2. Attribution: Maintain proper attribution to Tenstorrent and other contributors
+   as specified in the NOTICE file.
+
+3. Change Documentation: If you modify WallaBMC files, include prominent notices
+   stating that you changed the files and the date of changes.
+
+4. No Warranty Disclaimer: Make clear that WallaBMC is provided without warranty,
+   unless you choose to provide your own warranty (at your own risk and expense).
+
+Patent Defense
+--------------
+The Apache 2.0 License includes a patent retaliation clause: if you initiate
+patent litigation claiming that WallaBMC infringes your patents, your patent
+license from the WallaBMC contributors automatically terminates.
+
+Contributing to WallaBMC
+------------------------
+If you submit contributions to WallaBMC, you are agreeing to license your
+contributions under the Apache 2.0 License, unless you explicitly state otherwise.
+See CONTRIBUTING.md for details on how to contribute.
+
+Commercial Use
+--------------
+You are free to use WallaBMC in commercial products and services without any
+licensing fees to Tenstorrent. Many companies use Apache 2.0-licensed software
+in their commercial offerings.
+
+Questions
+---------
+If you have questions about the Apache 2.0 License or how it applies to WallaBMC,
+please consult with your legal counsel or contact Tenstorrent's Open Source 
+Program Office at ospo@tenstorrent.com.
+
+Additional Resources
+--------------------
+- Full Apache 2.0 License text: LICENSE file in this repository
+- Apache Software Foundation FAQ: https://www.apache.org/foundation/license-faq.html
+- Official Apache 2.0 License: https://www.apache.org/licenses/LICENSE-2.0
