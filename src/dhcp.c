@@ -1,10 +1,9 @@
 /* Networking DHCPv4 client */
 
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Copyright (c) 2017 ARM Ltd.
  * Copyright (c) 2016 Intel Corporation.
- *
- * SPDX-License-Identifier: Apache-2.0
  */
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(wallabmc_dhcp, LOG_LEVEL_INF);

@@ -1,10 +1,9 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * HTTP web server
  *
  * Copyright (c) 2023, Emna Rekik
  * Copyright (c) 2024, Nordic Semiconductor
- *
- * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/kernel.h>

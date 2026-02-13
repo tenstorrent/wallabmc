@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Minimal Zephyr Redfish Implementation
  * Implements: ComputerSystem.Reset (On/ForceOff/PowerCycle)
@@ -6,8 +7,6 @@
  * redfishtool Systems -r 192.168.2.55 -vvv reset On
  * redfishtool Systems -r 192.168.2.55 -vvv reset ForceOff
  * redfishtool Systems -r 192.168.2.55 -vvv reset PowerCycle
- *
- * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/kernel.h>

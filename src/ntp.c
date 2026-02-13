@@ -1,9 +1,8 @@
+/* SPDX-License-Identifier: Apache-2.0 */
 /*
  * Based on samples/net/sockets/sntp_client/src/main.c
  * Copyright (c) 2017 Linaro Limited
  * Copyright (c) 2019 Intel Corporation
- *
- * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <zephyr/logging/log.h>
