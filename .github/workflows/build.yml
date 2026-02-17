@@ -7,6 +7,9 @@ on:
     - cron: '0 0 * * 5'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     # ubuntu-latest does not have enough space, use a large TT runner
