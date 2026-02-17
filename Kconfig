@@ -200,6 +200,10 @@ config APP_WEB_TERMINAL
 	select LOG_BACKEND_WS
 	select LOG_BACKEND_WS_AUTOSTART
 
+config DEFAULT_ADMIN_PASSWORD
+	string "Default admin password"
+	default "admin"
+
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int
 	depends on HTTP_SERVER_WEBSOCKET

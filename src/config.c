@@ -54,6 +54,8 @@ struct config_data {
 	uint32_t bmc_default_ip4_gw;
 } __packed;
 
+BUILD_ASSERT(strlen(CONFIG_DEFAULT_ADMIN_PASSWORD) <= MAX_PW_LEN);
+
 /*
  * strlcpy() is not available in Zephyr, define it ourselves.
  *
@@ -816,7 +818,7 @@ int config_init(void)
 		config_data.host_auto_poweron = 0;
 
 	if (!IS_ONDISK(bmc_admin_password))
-		strlcpy(config_data.bmc_admin_password, "admin", sizeof(config_data.bmc_admin_password));
+		strlcpy(config_data.bmc_admin_password, CONFIG_DEFAULT_ADMIN_PASSWORD, sizeof(config_data.bmc_admin_password));
 
 	if (!IS_ONDISK(bmc_use_ntp))
 		config_data.bmc_use_ntp = 1;
