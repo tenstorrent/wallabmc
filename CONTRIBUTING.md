@@ -109,7 +109,7 @@ Supported test platforms:
 
 - SiFive HiFive Premier P550 MCU
 - Nucleo F767ZI board
-- qemu see [scripts/run_qemu_ci.py](scripts/run_qemu_ci.py)
+- qemu ( see [run_qemu_ci.py](scripts/run_qemu_ci.py) )
 
 Platforms supported by the Zephyr Project tend to be quite simple to enable.
 

@@ -24,7 +24,7 @@ WallaBMC is designed for embedded systems requiring BMC capabilities without the
 WallaBMC currently supports the following hardware platforms:
 * **SiFive HiFive Premier P550 MCU**: RISC-V based platform
 * **STM32 Nucleo F767ZI**: ARM Cortex-M7 development board (standalone, no host CPU)
-* **qemu**: see ( see [scripts/run_qemu_ci.py](scripts/run_qemu_ci.py) )
+* **qemu**:  see [run_qemu_ci.py](scripts/run_qemu_ci.py)
 
 ## Getting Started
 
@@ -66,9 +66,9 @@ where $BOARD is the target board.
 
 ### Supported boards:
 
-* ``hifive_premier_p550_mcu``
+* ``hifive_premier_p550_mcu`` see [README.md](boards/sifive/hifive_premier_p550_mcu/support/README.md)
 * ``nucleo_f767zi``
-* ``qemu``
+* ``qemu`` see [run_qemu_ci.py](scripts/run_qemu_ci.py)
 
 ### Flashing
 
