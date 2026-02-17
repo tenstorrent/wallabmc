@@ -62,6 +62,8 @@ struct config_data {
 	uint32_t bmc_default_ip4_gw;
 };
 
+BUILD_ASSERT(strlen(CONFIG_DEFAULT_ADMIN_PASSWORD) <= MAX_PW_LEN);
+
 static struct config_data config_data;
 
 /*
@@ -758,7 +760,7 @@ int config_init(void)
 	 */
 	rc = config_read_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	if (rc < 0) {
-		strlcpy(config_data.bmc_admin_password, "admin", sizeof(config_data.bmc_admin_password));
+		strlcpy(config_data.bmc_admin_password, CONFIG_DEFAULT_ADMIN_PASSWORD, sizeof(config_data.bmc_admin_password));
 		config_write_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	}
 

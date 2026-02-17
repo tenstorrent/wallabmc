@@ -224,6 +224,10 @@ config APP_WEB_TERMINAL
 	select BASE64
 	select MBEDTLS_SHA1
 
+config DEFAULT_ADMIN_PASSWORD
+	string "Default admin password"
+	default "admin"
+
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int
 	depends on HTTP_SERVER_WEBSOCKET
