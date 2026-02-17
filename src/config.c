@@ -1,4 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #define LOG_LEVEL CONFIG_LOG_DEFAULT_LEVEL
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);

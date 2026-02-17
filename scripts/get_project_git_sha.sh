@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
 # SPDX-License-Identifier: Apache-2.0
 #
 # Get the git SHA1 of the project with optional -dirty suffix
