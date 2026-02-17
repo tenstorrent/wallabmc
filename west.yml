@@ -10,4 +10,4 @@ manifest:
       import: true
 
   self:
-    path: atlantis-bmc
+    path: wallabmc

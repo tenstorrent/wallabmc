@@ -54,7 +54,7 @@ the following command:
 .. code-block:: sh
 
         # initialize workspace for wallabmc (main branch)
-        west init -m https://yyz-gitlab.local.tenstorrent.com/riscv-sw/atlantis-bmc.git --mr main workspace
+        west init -m https://github.com/tenstorrent/wallabmc --mr main workspace
         # update Zephyr modules
         cd workspace
         west update

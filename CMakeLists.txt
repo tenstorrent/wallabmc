@@ -4,7 +4,7 @@ list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
 cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-project(atlantis-bmc)
+project(wallabmc)
 
 # Get project git SHA1 if not provided via CMake variable
 if(NOT DEFINED PROJECT_GIT_SHA)
