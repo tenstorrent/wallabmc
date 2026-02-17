@@ -1,5 +1,7 @@
 # Security Policy
 
+**⚠️ WallaBMC is still pre-alpha and security is kind of work in progress. ⚠️ **
+
 ## Reporting Security Vulnerabilities
 
 The security of WallaBMC is important to us. If you discover a security vulnerability, we appreciate your help in disclosing it to us in a responsible manner.
