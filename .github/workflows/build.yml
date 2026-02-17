@@ -11,7 +11,18 @@ permissions:
   contents: read
 
 jobs:
+  check-spdx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SPDX licenses
+        uses: tenstorrent/tt-github-actions/.github/actions/spdx-checker@main
+        with:
+          verbose: 'true'
+
   build:
+    needs: check-spdx
+
     # ubuntu-latest does not have enough space, use a large TT runner
     runs-on: tt-ubuntu-2404-large-stable
     container:
