@@ -1,0 +1,7 @@
+# Files to exclude from SPDX license header checks.
+# Binary files (images, etc.) cannot contain SPDX headers; their license
+# is documented in LICENSE-DOCS.
+ignore:
+  include:
+    - static_web_resources/logo.jpeg
+    - img/logo.png

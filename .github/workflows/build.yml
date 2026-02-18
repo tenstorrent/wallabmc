@@ -19,6 +19,7 @@ jobs:
         uses: tenstorrent/tt-github-actions/.github/actions/spdx-checker@main
         with:
           verbose: 'true'
+          ignore_config_file: .github/spdx-ignore.yaml
 
   build:
     needs: check-spdx
