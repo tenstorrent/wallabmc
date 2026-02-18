@@ -104,3 +104,14 @@ Web UI. The Web UI can also access the BMC console.
 * ``config`` shell command can be used to configure the BMC.
 * ``power`` can power the host on and off. On the Nucleo board there is no
   host CPU so one of the LEDs is a stand-in for a host power GPIO.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for information on how to contribute to this project.
+
+## License
+
+This project is licensed under the terms described in:
+* [LICENSE](LICENSE) – full license text
+* [LICENSE_understanding.txt](LICENSE_understanding.txt) – license summary and clarification
+* [LICENSE-DOCS](LICENSE-DOCS) – documentation licensing terms
