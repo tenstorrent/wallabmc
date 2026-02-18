@@ -1,4 +1,7 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/*
+ * SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
+ * SPDX-License-Identifier: Apache-2.0
+ */
 #ifndef __BUTTON_H__
 #define __BUTTON_H__
 #ifdef CONFIG_PERSISTENT_STORAGE

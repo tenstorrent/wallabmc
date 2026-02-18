@@ -1,6 +1,6 @@
 # hifive_premier_p550_mcu board configuration
 
-# Copyright (c) 2025 Tenstorrent Corporation
+# SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
 # SPDX-License-Identifier: Apache-2.0
 
 if BOARD_HIFIVE_PREMIER_P550_MCU

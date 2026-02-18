@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: © 2025-2026 Tenstorrent AI ULC
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <zephyr/linker/iterable_sections.h>
 
 ITERABLE_SECTION_ROM(http_resource_desc_http_service, Z_LINK_ITERABLE_SUBALIGN)
