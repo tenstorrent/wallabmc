@@ -627,7 +627,12 @@ int config_bmc_password_set(const char *password)
 {
 	int rc;
 
-	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
+	if (strlen(password) > MAX_PW_LEN) {
+		LOG_ERR("Password too long, max length is %d characters", MAX_PW_LEN);
+		return -EINVAL;
+	}
+
+	strlcpy(config_data.bmc_admin_password, password, sizeof(config_data.bmc_admin_password));
 
 	rc = write_config();
 	if (rc < 0) {
@@ -644,6 +649,8 @@ int config_bmc_password_set(const char *password)
 
 static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **argv)
 {
+	int rc;
+
 	ARG_UNUSED(argc);
 
 	if (!is_boot_finished()) {
@@ -651,7 +658,12 @@ static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **a
 		return -EAGAIN;
 	}
 
-	config_bmc_password_set(argv[1]);
+	rc = config_bmc_password_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC admin password (err=%d)", rc);
+		return rc;
+	}
+
 	shell_info(sh, "BMC admin password updated");
 
 	return 0;
