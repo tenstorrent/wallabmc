@@ -6,6 +6,7 @@
 #define __CONFIG_H__
 int config_init(void);
 int config_clear(void);
+const char *config_bmc_hostname(void);
 int config_bmc_hostname_set(const char *hostname);
 int config_bmc_password_set(const char *password);
 bool config_bmc_use_ntp(void);
