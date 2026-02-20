@@ -65,6 +65,7 @@ static void print_banner(void)
 #endif
 }
 
+#ifdef CONFIG_REBOOT
 FUNC_NORETURN int bmc_reboot(void)
 {
 	fs_exit();
@@ -84,7 +85,9 @@ FUNC_NORETURN int bmc_reboot(void)
 	k_panic();
 	for (;;);
 }
+#endif
 
+#ifdef CONFIG_POWEROFF
 static FUNC_NORETURN int bmc_poweroff(void)
 {
 	fs_exit();
@@ -94,13 +97,13 @@ static FUNC_NORETURN int bmc_poweroff(void)
 	log_panic();
 	k_msleep(100);
 
-#ifdef CONFIG_POWEROFF
 	sys_poweroff();
 	k_panic();
-#endif
 	for (;;);
 }
+#endif
 
+#ifdef CONFIG_REBOOT
 static int cmd_bmc_reboot(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -108,7 +111,9 @@ static int cmd_bmc_reboot(const struct shell *sh, size_t argc, char **argv)
 	bmc_reboot();
 	return 0;
 }
+#endif
 
+#ifdef CONFIG_POWEROFF
 static int cmd_bmc_poweroff(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -116,15 +121,23 @@ static int cmd_bmc_poweroff(const struct shell *sh, size_t argc, char **argv)
 	bmc_poweroff();
 	return 0;
 }
+#endif
 
+#if defined(CONFIG_REBOOT) || defined(CONFIG_POWEROFF)
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_bmc_cmds,
+#ifdef CONFIG_REBOOT
 	SHELL_CMD(reboot,	NULL, "Reboot BMC.", cmd_bmc_reboot),
+#endif
+#ifdef CONFIG_POWEROFF
 	SHELL_CMD(poweroff,	NULL, "Power off BMC.", cmd_bmc_poweroff),
+#endif
 	SHELL_SUBCMD_SET_END
 );
 
 SHELL_CMD_REGISTER(bmc, &sub_bmc_cmds, "BMC system commands", NULL);
+#endif
 
+#if 0
 static int cmd_hop(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -193,6 +206,7 @@ static int cmd_hop(const struct shell *sh, size_t argc, char **argv)
 }
 
 SHELL_CMD_REGISTER(hop, NULL, "Make the wallaby hop across the screen.", cmd_hop);
+#endif
 
 int main(void)
 {
