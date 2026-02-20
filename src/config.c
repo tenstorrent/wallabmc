@@ -55,6 +55,27 @@ struct config_data {
 } __packed;
 
 /*
+ * strlcpy() is not available in Zephyr, define it ourselves.
+ *
+ * > strlcpy() copies up to dstsize - 1 characters from the string src to dst,
+ * > NUL-terminating the result if dstsize is not 0.
+ * > strlcpy() returns the total length of the string it tried to create,
+ * > ie. the length of src.
+ */
+static size_t strlcpy(char *ZRESTRICT dst, const char *ZRESTRICT src, size_t dstsize)
+{
+	size_t src_len = strlen(src);
+
+	if (dstsize != 0) {
+		size_t copy_len = min(src_len, dstsize - 1);
+		memcpy(dst, src, copy_len);
+		dst[copy_len] = '\0';
+	}
+
+	return src_len;
+}
+
+/*
  * littlefs can keep up to 64 bytes of data in the file/
  * inode rather than require a new data sector for it.
  * P550 only has 2 sectors which is not enough for a
