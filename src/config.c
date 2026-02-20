@@ -68,6 +68,11 @@ BUILD_ASSERT(sizeof(struct config_data) <= 64);
 
 static struct config_data config_data;
 
+const char *config_bmc_hostname(void)
+{
+	return config_data.bmc_hostname;
+}
+
 uint32_t config_bmc_default_ip4(void)
 {
 	return config_data.bmc_default_ip4;

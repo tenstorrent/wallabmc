@@ -142,6 +142,11 @@ int net_stop_dhcp4(void)
 int net_init(void)
 {
 	int rc;
+	const char *hostname = config_bmc_hostname();
+
+	rc = net_hostname_set(hostname, strlen(hostname));
+	if (rc)
+		LOG_ERR("Net hostname set failed");
 
 	if (config_bmc_default_ip4()) {
 		LOG_INF("Network static IP set");
