@@ -14,7 +14,6 @@ LOG_MODULE_REGISTER(wallabmc_fs, LOG_LEVEL_INF);
 
 #include "fs.h"
 
-#define STORAGE_PARTITION_LABEL		storage_partition
 #if defined(CONFIG_PERSISTENT_STORAGE) && FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL)
 #define STORAGE_PARTITION_ID		FIXED_PARTITION_ID(STORAGE_PARTITION_LABEL)
 #define STORAGE_PARTITION_DEVICE	FIXED_PARTITION_DEVICE(STORAGE_PARTITION_LABEL)
@@ -27,8 +26,6 @@ bool fs_enabled(void)
 {
 	return fs_is_enabled;
 }
-
-static const int CONFIG_ID = 1;
 
 static struct nvs_fs nvs_fs = {
 	.flash_device = STORAGE_PARTITION_DEVICE,
@@ -77,12 +74,12 @@ static int umount_fs(void)
 	return 0;
 }
 
-int config_clear(void)
+int fs_clear(void)
 {
 	int rc;
 
 	if (!fs_enabled())
-		return 0;
+		return -ENODEV;
 
 	rc = nvs_clear(&nvs_fs);
 	if (rc) {
@@ -93,46 +90,46 @@ int config_clear(void)
 	return 0;
 }
 
-ssize_t config_read(void *buf, size_t size)
+ssize_t fs_key_read(uint16_t id, void *buf, size_t size)
 {
-	int rc;
+	ssize_t rc;
 
-	rc = nvs_read(&nvs_fs, CONFIG_ID, buf, size);
+	if (!fs_enabled())
+		return -ENODEV;
+
+	rc = nvs_read(&nvs_fs, id, buf, size);
 	if (rc < 0) {
-		if (rc == -ENOENT)
-			return 0;
-		LOG_ERR("Could not read config (err=%d)", rc);
+		if (rc != -ENOENT)
+			LOG_ERR("Could not read config id %u (err=%zd)", id, rc);
 		return rc;
 	}
 
-	if (rc > size) {
-		LOG_INF("Read newer version of config (size=%d)", rc);
-		rc = size;
+	if ((size_t)rc > size) {
+		LOG_INF("Read config id %u object is larger than size (read %zd)", id, rc);
+		rc = -EINVAL; /* Fail */
 	}
 
 	return rc;
 }
 
-ssize_t config_write(const void *buf, size_t size)
+ssize_t fs_key_write(uint16_t id, const void *buf, size_t size)
 {
-	int rc;
+	ssize_t rc;
 
-	rc = nvs_write(&nvs_fs, CONFIG_ID, buf, size);
+	if (!fs_enabled())
+		return -ENODEV;
+
+	rc = nvs_write(&nvs_fs, id, buf, size);
 	if (rc < 0) {
-		LOG_ERR("Could not write config (err=%d)", rc);
+		LOG_ERR("Could not write config id %u (err=%zd)", id, rc);
 		return rc;
 	}
 	if (rc == 0) {
-		LOG_DBG("Writing unchanged data");
+		LOG_DBG("Writing unchanged data config id %u", id);
 		return size;
 	}
 
 	return rc;
-}
-
-static int increment_boot_file(void)
-{
-	return -ENOTSUP;
 }
 
 int fs_init(void)
@@ -155,38 +152,4 @@ int fs_exit(void)
 {
 	return umount_fs();
 }
-#else /* defined(CONFIG_PERSISTENT_STORAGE) && FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL) */
-
-int fs_init(void)
-{
-	LOG_INF("Filesystem storage not enabled for this board");
-	return 0;
-}
-
-int fs_exit(void)
-{
-	LOG_INF("Filesystem storage not enabled for this board");
-	return 0;
-}
-
-bool fs_enabled(void)
-{
-	return false;
-}
-
-ssize_t config_read(void *buf, size_t size)
-{
-	return -ENODEV;
-}
-
-ssize_t config_write(const void *buf, size_t size)
-{
-	return -ENODEV;
-}
-
-int config_clear(void)
-{
-	return 0;
-}
-
 #endif /* defined(CONFIG_PERSISTENT_STORAGE) && FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL) */

@@ -21,26 +21,34 @@ LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 #include "ntp.h"
 #include "fs.h"
 
-#define MAX_HOSTNAME_LEN 15
+#define MAX_HOSTNAME_LEN 20
 
-#define MAX_PW_LEN 15
+#define MAX_PW_LEN 20
 
-#define MAX_NTP_SERVER_LEN 15
+#define MAX_NTP_SERVER_LEN 40
 
-/*
- * Incrementing this allows struct config_data to be modified
- * arbitrarily, but there is no longer compatibility between
- * versions and the config will be destroyed.
- */
-#define FS_CONFIG_VERSION 2
+/* Incrementing this allows a flag-day upgrade, but avoid doing it. */
+#define CFG_CURRENT_VERSION 3
 
-/*
- * Add fields to the end, do not remove or change meaning.
- * Ignoring is okay if a field becomes unused, but gracefully
- * handling deprecated fiels would be better. Version should
- * not be bumped unless there is unavoidable incompatible
- * change.
- */
+enum config_id {
+	CFG_VERSION = 1,			/* uint8_t */
+	CFG_BMC_ADMIN_PASSWORD = 2,		/* C string */
+	CFG_BMC_HOSTNAME = 3,		/* C string */
+	CFG_BMC_DEFAULT_IP4 = 4,		/* uint32_t */
+	CFG_BMC_DEFAULT_IP4_NM = 5,		/* uint32_t */
+	CFG_BMC_DEFAULT_IP4_GW = 6,		/* uint32_t */
+	CFG_BMC_USE_DHCP4 = 7,		/* uint8_t */
+	CFG_BMC_USE_NTP = 8,			/* uint8_t */
+	CFG_BMC_NTP_SERVER = 9,		/* C string */
+	CFG_HOST_AUTO_POWERON = 10,		/* uint8_t */
+	/*
+	 * Add field IDs in increasing order and do not reuse deprecated
+	 * ones. Do not change meaning but add new and deprecate old.
+	 * Old fields should be deleted after they are upgraded to new --
+	 * don't bother handling downgrades.
+	 */
+};
+
 struct config_data {
 	uint8_t version;
 	char bmc_hostname[MAX_HOSTNAME_LEN + 1]; /* NULL terminated */
@@ -52,7 +60,9 @@ struct config_data {
 	char bmc_ntp_server[MAX_NTP_SERVER_LEN + 1]; /* NULL terminated */
 	uint32_t bmc_default_ip4_nm;
 	uint32_t bmc_default_ip4_gw;
-} __packed;
+};
+
+static struct config_data config_data;
 
 /*
  * strlcpy() is not available in Zephyr, define it ourselves.
@@ -75,16 +85,46 @@ static size_t strlcpy(char *ZRESTRICT dst, const char *ZRESTRICT src, size_t dst
 	return src_len;
 }
 
-/*
- * littlefs can keep up to 64 bytes of data in the file/
- * inode rather than require a new data sector for it.
- * P550 only has 2 sectors which is not enough for a
- * data sector, so keep this within 64 bytes until we
- * work out how to rearrange the flash more optimally.
- */
-BUILD_ASSERT(sizeof(struct config_data) <= 64);
+static bool config_use_fs = false;
 
-static struct config_data config_data;
+static ssize_t __config_read(uint16_t id, void *buf, size_t size)
+{
+	if (config_use_fs)
+		return fs_key_read(id, buf, size);
+	return -ENODEV;
+}
+
+static ssize_t __config_write(uint16_t id, const void *buf, size_t size)
+{
+	if (config_use_fs)
+		return fs_key_write(id, buf, size);
+	return -ENODEV;
+}
+
+#define config_read(id, var)				\
+({							\
+	__config_read(id, &var, sizeof(var));		\
+})
+
+#define config_read_str(id, var)			\
+({							\
+	ssize_t rc;					\
+	rc = __config_read(id, var, sizeof(var) - 1);	\
+	if (rc >= 0)					\
+		var[rc] = '\0';				\
+	rc;						\
+})
+
+#define config_write(id, var)				\
+({							\
+	__config_write(id, &var, sizeof(var));		\
+})
+
+#define config_write_str(id, var)			\
+({							\
+	__config_write(id, var, strlen(var));		\
+})
+
 
 const char *config_bmc_hostname(void)
 {
@@ -154,9 +194,8 @@ int config_bmc_hostname_set(const char *hostname)
 	if (rc)
 		return rc;
 
-	strncpy(config_data.bmc_hostname, hostname, MAX_HOSTNAME_LEN);
-
-	rc = config_write(&config_data, sizeof(config_data));
+	strlcpy(config_data.bmc_hostname, hostname, sizeof(config_data.bmc_hostname));
+	rc = config_write_str(CFG_BMC_HOSTNAME, config_data.bmc_hostname);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -237,7 +276,7 @@ int config_bmc_default_ip4_set(const char *str)
 		return rc;
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_BMC_DEFAULT_IP4, config_data.bmc_default_ip4);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -261,7 +300,7 @@ int config_bmc_default_ip4_nm_set(const char *str)
 		return rc;
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_BMC_DEFAULT_IP4_NM, config_data.bmc_default_ip4_nm);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -285,7 +324,7 @@ int config_bmc_default_ip4_gw_set(const char *str)
 		return rc;
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_BMC_DEFAULT_IP4_GW, config_data.bmc_default_ip4_gw);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -388,7 +427,7 @@ int config_bmc_use_dhcp4_set(bool use)
 		net_stop_dhcp4();
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_BMC_USE_DHCP4, config_data.bmc_use_dhcp4);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -440,7 +479,7 @@ int config_bmc_use_ntp_set(bool use)
 		stop_ntp();
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_BMC_USE_NTP, config_data.bmc_use_ntp);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -480,9 +519,8 @@ int config_bmc_ntp_server_set(const char *ntp_server)
 {
 	int rc;
 
-	strncpy(config_data.bmc_ntp_server, ntp_server, MAX_NTP_SERVER_LEN);
-
-	rc = config_write(&config_data, sizeof(config_data));
+	strlcpy(config_data.bmc_ntp_server, ntp_server, sizeof(config_data.bmc_ntp_server));
+	rc = config_write_str(CFG_BMC_NTP_SERVER, config_data.bmc_ntp_server);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -526,9 +564,8 @@ int config_bmc_password_set(const char *password)
 {
 	int rc;
 
-	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
-
-	rc = config_write(&config_data, sizeof(config_data));
+	strlcpy(config_data.bmc_admin_password, password, sizeof(config_data.bmc_admin_password));
+	rc = config_write_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -582,7 +619,7 @@ int config_host_auto_poweron_set(bool on)
 		config_data.host_auto_poweron = 0;
 	}
 
-	rc = config_write(&config_data, sizeof(config_data));
+	rc = config_write(CFG_HOST_AUTO_POWERON, config_data.host_auto_poweron);
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -626,7 +663,6 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	ARG_UNUSED(argv);
 
 	shell_print(sh, "--- Configuration ---");
-	shell_print(sh, "Version: %d",		config_data.version);
 	shell_print(sh, "BMC hostname: %s",	config_data.bmc_hostname);
 	shell_print(sh, "BMC default IPv4 address: %s", ip4_atos(config_data.bmc_default_ip4));
 	shell_print(sh, "BMC default IPv4 subnet mask: %s", ip4_atos(config_data.bmc_default_ip4_nm));
@@ -649,87 +685,106 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 
 SHELL_CMD_REGISTER(config, &sub_config_cmds, "Configuration commands", NULL);
 
+int config_clear(void)
+{
+	return fs_clear();
+}
+
 int config_init(void)
 {
-	int ondisk_size;
-	int rc;
+	ssize_t rc;
 
 	memset(&config_data, 0, sizeof(config_data));
+
 	if (fs_enabled()) {
-		rc = config_read(&config_data, sizeof(config_data));
+		config_use_fs = true;
+
+		rc = config_read(CFG_VERSION, config_data.version);
 		if (rc < 0) {
-			LOG_ERR("Error loading config");
-			return rc;
+			if (rc == -ENOENT)
+				LOG_INF("Config creating new");
+			else
+				LOG_INF("Config could not be read, creating new");
+			config_data.version = CFG_CURRENT_VERSION;
+			rc = config_write(CFG_VERSION, config_data.version);
+		} else if (config_data.version != CFG_CURRENT_VERSION) {
+			LOG_WRN("Config version unknown (version=%d), creating new config", config_data.version);
+			rc = config_clear();
+			if (rc == 0) {
+				config_data.version = CFG_CURRENT_VERSION;
+				rc = config_write(CFG_VERSION, config_data.version);
+			}
+		} else {
+			LOG_INF("Config loading from flash");
+			rc = 0;
 		}
-		ondisk_size = rc;
+		if (rc < 0) {
+			LOG_ERR("Config persistent storage failed, continuing with defaults");
+			config_use_fs = false;
+		}
+
 	} else {
-		ondisk_size = 0;
+		LOG_INF("Config persistent storage unavailable, using defaults");
 	}
 
 	/*
-	 * Fields either come from ondisk, in which case they should be verified and
-	 * applied, or they are new fields in which case they should be initialised
-	 * and defaults applied.
+	 * Fields that can not be read from disk should be given defaults and
+	 * written back. Could avoid writing in that case, but that would make
+	 * it harder to change defaults in future.
 	 */
-#define IS_ONDISK(field)			\
-	(ondisk_size >= offsetof(struct config_data, field) + sizeof(config_data.field))
-
-	if (IS_ONDISK(version)) {
-		if (config_data.version != FS_CONFIG_VERSION) {
-			LOG_WRN("Config version unknown (version=%d), creating new config", config_data.version);
-			ondisk_size = 0;
-			config_data.version = FS_CONFIG_VERSION;
-		}
-	} else {
-		config_data.version = FS_CONFIG_VERSION;
+	rc = config_read_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
+	if (rc < 0) {
+		strlcpy(config_data.bmc_admin_password, "admin", sizeof(config_data.bmc_admin_password));
+		config_write_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	}
 
-	if (!IS_ONDISK(bmc_hostname)) {
-		/* Default to CONFIG_NET_HOSTNAME */
-		strncpy(config_data.bmc_hostname, net_hostname_get(), MAX_HOSTNAME_LEN);
+	rc = config_read_str(CFG_BMC_HOSTNAME, config_data.bmc_hostname);
+	if (rc < 0) {
+		/* Default to CONFIG_NET_HOSTNAME, which net_hostname_get() will return */
+		strlcpy(config_data.bmc_hostname, net_hostname_get(), sizeof(config_data.bmc_hostname));
+		config_write_str(CFG_BMC_HOSTNAME, config_data.bmc_hostname);
 	}
 
-	if (!IS_ONDISK(bmc_use_dhcp4))
-		config_data.bmc_use_dhcp4 = 1;
+	rc = config_read(CFG_BMC_DEFAULT_IP4, config_data.bmc_default_ip4);
+	if (rc < 0) {
+		config_data.bmc_default_ip4 = 0; /* Default no IP4 addr/gw/netmask */
+		config_write(CFG_BMC_DEFAULT_IP4, config_data.bmc_default_ip4);
+	}
 
-	if (!IS_ONDISK(bmc_default_ip4))
-		config_data.bmc_default_ip4 = 0;
-
-	if (!IS_ONDISK(host_auto_poweron))
-		config_data.host_auto_poweron = 0;
-
-	if (!IS_ONDISK(bmc_admin_password))
-		strncpy(config_data.bmc_admin_password, "admin", MAX_PW_LEN);
-
-	if (!IS_ONDISK(bmc_use_ntp))
-		config_data.bmc_use_ntp = 1;
-
-	if (!IS_ONDISK(bmc_ntp_server))
-		strncpy(config_data.bmc_ntp_server, "pool.ntp.org", MAX_NTP_SERVER_LEN);
-
-	if (!IS_ONDISK(bmc_default_ip4_nm))
+	rc = config_read(CFG_BMC_DEFAULT_IP4_NM, config_data.bmc_default_ip4_nm);
+	if (rc < 0) {
 		config_data.bmc_default_ip4_nm = 0;
-
-	if (!IS_ONDISK(bmc_default_ip4_gw))
-		config_data.bmc_default_ip4_gw = 0;
-#undef IS_ONDISK
-
-	/* Write back any newly initialised fields. */
-	if (fs_enabled() && ondisk_size != sizeof(config_data)) {
-		rc = config_write(&config_data, sizeof(config_data));
-		if (rc < 0) {
-			LOG_ERR("Could not update config file, continuing without persistent storage");
-			return fs_exit();
-		}
+		config_write(CFG_BMC_DEFAULT_IP4_NM, config_data.bmc_default_ip4_nm);
 	}
 
-	if (ondisk_size == 0) {
-		LOG_INF("Initialised new config");
-	} else {
-		if (ondisk_size == sizeof(config_data))
-			LOG_INF("Loaded config from flash");
-		else
-			LOG_INF("Loaded config from flash, initialised new fields");
+	rc = config_read(CFG_BMC_DEFAULT_IP4_GW, config_data.bmc_default_ip4_gw);
+	if (rc < 0) {
+		config_data.bmc_default_ip4_gw = 0;
+		config_write(CFG_BMC_DEFAULT_IP4_GW, config_data.bmc_default_ip4_gw);
+	}
+
+	rc = config_read(CFG_BMC_USE_DHCP4, config_data.bmc_use_dhcp4);
+	if (rc < 0) {
+		config_data.bmc_use_dhcp4 = 1; /* default DHCP4 enabled */
+		config_write(CFG_BMC_USE_DHCP4, config_data.bmc_use_dhcp4);
+	}
+
+	rc = config_read(CFG_BMC_USE_NTP, config_data.bmc_use_ntp);
+	if (rc < 0) {
+		config_data.bmc_use_ntp = 1; /* default NTP enabled */
+		config_write(CFG_BMC_USE_NTP, config_data.bmc_use_ntp);
+	}
+
+	rc = config_read_str(CFG_BMC_NTP_SERVER, config_data.bmc_ntp_server);
+	if (rc < 0) {
+		strlcpy(config_data.bmc_ntp_server, "pool.ntp.org", sizeof(config_data.bmc_ntp_server));
+		config_write_str(CFG_BMC_NTP_SERVER, config_data.bmc_ntp_server);
+	}
+
+	rc = config_read(CFG_HOST_AUTO_POWERON, config_data.host_auto_poweron);
+	if (rc < 0) {
+		config_data.host_auto_poweron = 0;
+		config_write(CFG_HOST_AUTO_POWERON, config_data.host_auto_poweron);
 	}
 
 	return 0;
