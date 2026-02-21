@@ -63,9 +63,11 @@ To build the application, run the following command:
 
 ```
 cd wallabmc
-west build -b $BOARD app
+west build --sysbuild -b $BOARD app
 ```
 where $BOARD is the target board.
+
+Try removing the build/ directory if you get build errors.
 
 ### Supported boards:
 
@@ -77,11 +79,12 @@ See the [Hardware Support](#Hardware-Support) section.
 west flash --runner openocd
 ```
 
-Alternatively, use the ``zephyr.elf`` file from the ``build/zephyr`` directory
-and run the openocd command:
+Alternatively, use the ``build/wallabmc/zephyr/zephyr.signed.hex`` and
+``build/mcuboot/zephyr/zephyr.hex`` files, and run the openocd commands:
 
 ```
-flash write_image erase zephyr.elf
+flash write_image erase build/mcuboot/zephyr/zephyr.hex
+flash write_image erase build/wallabmc/zephyr/zephyr.signed.hex
 ```
 
 ### Running
