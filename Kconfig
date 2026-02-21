@@ -280,11 +280,15 @@ config PERSISTENT_STORAGE
 	# select SRAM_VECTOR_TABLE
 	# select SRAM_SW_ISR_TABLE
 	# select DEVICE_MUTABLE
-	
-	# Enable Filesystem and LittleFS
-	select FILE_SYSTEM
-	select FILE_SYSTEM_LITTLEFS
-	select FILE_SYSTEM_MKFS
+	# Disable littlefs
+	# select FILE_SYSTEM
+	# select FILE_SYSTEM_LITTLEFS
+	# select FILE_SYSTEM_MKFS
+	select NVS
+	select NVS_INIT_BAD_MEMORY_REGION # Do not require erased flash
+	# XXX: Investigate using settings subsystem
+	# for config.
+	#select SETTINGS
 
 config JTAG
 	bool "JTAG support"
