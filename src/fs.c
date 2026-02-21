@@ -153,7 +153,6 @@ ssize_t config_read(void *buf, size_t size)
 			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
 			return rc;
 		}
-		memset(buf, 0, size);
 		goto out_close;
 	}
 
@@ -162,8 +161,6 @@ ssize_t config_read(void *buf, size_t size)
 		LOG_ERR("Could not open or create file %s (err=%d)", CONFIG_FILE, rc);
 		return rc;
 	}
-
-	memset(buf, 0, size);
 
 	while (remain) {
 		rc = fs_read(&config_file, buf + copied, remain);
@@ -351,8 +348,6 @@ int config_clear(void)
 ssize_t config_read(void *buf, size_t size)
 {
 	int rc;
-
-	memset(buf, 0, size);
 
 	rc = nvs_read(&nvs_fs, CONFIG_ID, buf, size);
 	if (rc < 0) {

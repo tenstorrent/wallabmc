@@ -633,16 +633,15 @@ int config_init(void)
 	int ondisk_size;
 	int rc;
 
+	memset(&config_data, 0, sizeof(config_data));
 	if (fs_enabled()) {
 		rc = config_read(&config_data, sizeof(config_data));
 		if (rc < 0) {
 			LOG_ERR("Error loading config");
 			return rc;
 		}
-
 		ondisk_size = rc;
 	} else {
-		memset(&config_data, 0, sizeof(config_data));
 		ondisk_size = 0;
 	}
 
@@ -657,7 +656,6 @@ int config_init(void)
 	if (IS_ONDISK(version)) {
 		if (config_data.version != FS_CONFIG_VERSION) {
 			LOG_WRN("Config version unknown (version=%d), creating new config", config_data.version);
-			memset(&config_data, 0, sizeof(config_data));
 			ondisk_size = 0;
 			config_data.version = FS_CONFIG_VERSION;
 		}
