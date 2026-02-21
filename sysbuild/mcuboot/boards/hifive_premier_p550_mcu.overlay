@@ -1,0 +1,12 @@
+#include "../../../boards/hifive_premier_p550_mcu.overlay"
+
+/*
+ * This comes from zephyr/bootloader/mcuboot/boot/zephyr/app.overlay
+ * Otherwise mcuboot builds using the slot0_partition which is where
+ * wallabmc lives.
+ */
+/ {
+    chosen {
+        zephyr,code-partition = &boot_partition;
+    };
+};
