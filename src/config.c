@@ -110,6 +110,21 @@ const char *config_bmc_ntp_server(void)
 	return config_data.bmc_ntp_server;
 }
 
+#if defined(CONFIG_APP_HTTPS_PSK)
+/*
+ * This is a placeholder to test PSK. If we want to support it
+ * properly it would have to be configurable.
+ */
+bool config_bmc_https_psk(const char **psk, int *psk_len)
+{
+	static const char p[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, };
+
+	*psk = p;
+	*psk_len = sizeof(p);
+	return true;
+}
+#endif
+
 int config_bmc_hostname_set(const char *hostname)
 {
 	int rc;
