@@ -220,6 +220,10 @@ config APP_WEB_TERMINAL
 	select BASE64
 	select MBEDTLS_SHA1
 
+config SHELL_WEBSOCKET_ENDPOINT_URL
+	string
+	depends on SHELL_BACKEND_WEBSOCKET
+	default "console/bmc"
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int
 	depends on HTTP_SERVER_WEBSOCKET
@@ -323,12 +327,18 @@ config APP_STACK_DEBUG
 	select THREAD_NAME
 	select THREAD_ANALYZER
 	select THREAD_ANALYZER_RUN_UNLOCKED
-config CONSOLE_BRIDGE
-	bool "Console bridge (USART6 to TCP port 22)"
+
+config CONSOLE_LOGGER
+	bool "Console logger (host console uart)"
 	default y
 	select SERIAL
 	select SERIAL_SUPPORT_ASYNC
 	select UART_ASYNC_API
+
+config CONSOLE_BRIDGE
+	bool "Console bridge (console log to TCP port 22)"
+	default y
+	depends on CONSOLE_LOGGER
 
 if CONSOLE_BRIDGE
 

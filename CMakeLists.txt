@@ -79,8 +79,13 @@ target_sources_ifdef(CONFIG_JTAG app PRIVATE
 	src/jtag.c
 )
 
+target_sources_ifdef(CONFIG_CONSOLE_LOGGER app PRIVATE
+	src/console_logger.c
+)
+
 target_sources_ifdef(CONFIG_CONSOLE_BRIDGE app PRIVATE
 	src/console_bridge.c
+	src/console_bridge_ws.c
 )
 
 target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
