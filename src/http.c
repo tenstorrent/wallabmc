@@ -101,42 +101,46 @@ static int setup_tls(void)
 }
 #endif /* defined(CONFIG_APP_HTTPS) */
 
-/* Use the Sec-WebSocket-Protocol header to send authentication for the web socket */
-HTTP_SERVER_REGISTER_HEADER_CAPTURE(capture_sec_websocket_protocol, "Sec-WebSocket-Protocol");
-
+#include <zephyr/net/websocket.h>
 #define CREDENTIALS_MAX_LEN 64
-static int ws_validate_auth(const struct http_header *headers, size_t header_count)
+static int ws_validate_auth(int ws_socket, struct http_request_ctx *request_ctx, void *user_data)
 {
-	const char *auth_header = NULL;
-	const char *prefix = "Basic_";
+	static const char auth_prefix[] = "Auth:";
+	uint8_t rx_buf[sizeof(auth_prefix) + CREDENTIALS_MAX_LEN];
+	uint32_t message_type;
+	uint64_t remaining;
+	int rc;
+	int32_t timeout_ms = 3000;
 
-	for (unsigned int i = 0; i < header_count; i++) {
-		if (!strcmp(headers[i].name, "Sec-WebSocket-Protocol")) {
-			auth_header = headers[i].value;
-			break;
-		}
+	rc = websocket_recv_msg(ws_socket, rx_buf, sizeof(rx_buf) - 1,
+				&message_type, &remaining, timeout_ms);
+	if (rc <= 0) {
+		LOG_WRN("No websocket auth message (err=%d)", rc);
+		websocket_disconnect(ws_socket);
+		return -EIO;
 	}
 
-	if (auth_header == NULL) {
-		LOG_WRN("No auth header");
-		return -1;
+	rx_buf[rc] = '\0'; /* Nul terminate so we can strcmp it */
+
+	if (memcmp(rx_buf, auth_prefix, sizeof(auth_prefix) - 1)) {
+		LOG_WRN("No websocket auth message (%s)", rx_buf);
+		websocket_disconnect(ws_socket);
+		return -EINVAL;
 	}
 
-	if (strncmp(auth_header, prefix, strlen(prefix)) != 0) {
-		LOG_WRN("Unexpected Sec-WebSocket-Protocol");
-		return -1;
-	}
+	const char *auth = rx_buf + sizeof(auth_prefix) - 1;
 
 	// Build the expected string "user_pass"
 	static uint8_t expected[CREDENTIALS_MAX_LEN];
 	snprintf(expected, sizeof(expected), "%s_%s", "admin", config_bmc_admin_password());
 
-	if (strcmp(auth_header + strlen(prefix), expected) == 0)
-		return 0; // Success!
+	if (strcmp(auth, expected)) {
+		LOG_WRN("Websocket auth incorrect (%s)", rx_buf);
+		websocket_disconnect(ws_socket);
+		return -EPERM;
+	}
 
-	LOG_WRN("Authentication did not match");
-
-	return -1;
+	return 0;
 }
 
 static int (*shell_http_ws_cb)(int ws_socket, struct http_request_ctx *request_ctx, void *user_data);
@@ -144,17 +148,19 @@ static int (*shell_https_ws_cb)(int ws_socket, struct http_request_ctx *request_
 
 int shell_http_ws_auth_cb(int ws_socket, struct http_request_ctx *request_ctx, void *user_data)
 {
-	if (ws_validate_auth(request_ctx->headers, request_ctx->header_count) < 0) {
-		return -EPERM;
-	}
+	int rc = ws_validate_auth(ws_socket, request_ctx, user_data);
+	if (rc < 0)
+		return rc;
+
 	return shell_http_ws_cb(ws_socket, request_ctx, user_data);
 }
 
 int shell_https_ws_auth_cb(int ws_socket, struct http_request_ctx *request_ctx, void *user_data)
 {
-	if (ws_validate_auth(request_ctx->headers, request_ctx->header_count) < 0) {
-		return -EPERM;
-	}
+	int rc = ws_validate_auth(ws_socket, request_ctx, user_data);
+	if (rc < 0)
+		return rc;
+
 	return shell_https_ws_cb(ws_socket, request_ctx, user_data);
 }
 
