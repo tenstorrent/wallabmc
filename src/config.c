@@ -12,7 +12,6 @@ LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 #include <zephyr/sys/util.h>
 #include <zephyr/kernel.h>
 
-#include <zephyr/fs/fs.h>
 #include <zephyr/net/hostname.h>
 #include <zephyr/posix/arpa/inet.h> /* inet_ntop */
 
@@ -21,8 +20,6 @@ LOG_MODULE_REGISTER(wallabmc_config, LOG_LEVEL_INF);
 #include "net.h"
 #include "ntp.h"
 #include "fs.h"
-
-static const char CONFIG_FILE[] = "/lfs/config_data.bin";
 
 #define MAX_HOSTNAME_LEN 15
 
@@ -113,125 +110,6 @@ const char *config_bmc_ntp_server(void)
 	return config_data.bmc_ntp_server;
 }
 
-static bool config_exists(void)
-{
-	struct fs_dirent *entry; /* don't put this on stack */
-	int rc;
-
-	if (!fs_enabled())
-		return false;
-
-	entry = malloc(sizeof(*entry));
-
-	rc = fs_stat(CONFIG_FILE, entry);
-	if (rc) {
-		if (rc != -ENOENT)
-			LOG_ERR("Could not stat file %s (err=%d)", CONFIG_FILE, rc);
-		free(entry);
-		return false;
-	}
-
-	if (entry->type != FS_DIR_ENTRY_FILE) {
-		LOG_ERR("Config %s is not a regular file! (err=%d)", CONFIG_FILE, rc);
-		free(entry);
-		return false;
-        }
-
-	free(entry);
-
-	return true;
-}
-
-static int read_config(void)
-{
-	struct fs_file_t config_file;
-	size_t remain = sizeof(config_data);
-	size_t copied = 0;
-	int rc;
-
-	fs_file_t_init(&config_file);
-
-	if (!config_exists()) {
-		memset(&config_data, 0, sizeof(config_data));
-		return copied;
-	}
-
-	rc = fs_open(&config_file, CONFIG_FILE, FS_O_READ);
-	if (rc) {
-		LOG_ERR("Could not open or create file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
-	}
-
-	memset(&config_data, 0, sizeof(config_data));
-
-	while (remain) {
-		rc = fs_read(&config_file, (void *)(((unsigned long)&config_data) + copied), remain);
-		if (rc < 0) {
-			LOG_ERR("Could not read file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
-		if (rc == 0)
-			break;
-
-		remain -= rc;
-		copied += rc;
-	}
-
-	rc = fs_close(&config_file);
-	if (rc) {
-		LOG_ERR("Could not close file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
-	}
-
-	return copied;
-}
-
-static int write_config(void)
-{
-	struct fs_file_t config_file;
-	size_t remain = sizeof(config_data);
-	size_t copied = 0;
-	int rc;
-
-	if (!fs_enabled())
-		return 0;
-
-	fs_file_t_init(&config_file);
-
-	if (!config_exists()) {
-		rc = fs_open(&config_file, CONFIG_FILE, FS_O_CREATE);
-		if (rc) {
-			LOG_ERR("Could not create file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
-	} else {
-		rc = fs_open(&config_file, CONFIG_FILE, FS_O_WRITE);
-		if (rc) {
-			LOG_ERR("Could not open file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
-	}
-
-	while (remain) {
-		rc = fs_write(&config_file, (void *)(((unsigned long)&config_data) + copied), remain);
-		if (rc <= 0) {
-			LOG_ERR("Could not write file %s (err=%d)", CONFIG_FILE, rc);
-			return rc;
-		}
-
-		remain -= rc;
-		copied += rc;
-	}
-
-	rc = fs_close(&config_file);
-	if (rc) {
-		LOG_ERR("Could not close file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
-	}
-
-	return copied;
-}
-
 int config_bmc_hostname_set(const char *hostname)
 {
 	int rc;
@@ -242,7 +120,7 @@ int config_bmc_hostname_set(const char *hostname)
 
 	strncpy(config_data.bmc_hostname, hostname, MAX_HOSTNAME_LEN);
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -323,7 +201,7 @@ int config_bmc_default_ip4_set(const char *str)
 		return rc;
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -347,7 +225,7 @@ int config_bmc_default_ip4_nm_set(const char *str)
 		return rc;
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -371,7 +249,7 @@ int config_bmc_default_ip4_gw_set(const char *str)
 		return rc;
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -474,7 +352,7 @@ int config_bmc_use_dhcp4_set(bool use)
 		net_stop_dhcp4();
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -526,7 +404,7 @@ int config_bmc_use_ntp_set(bool use)
 		stop_ntp();
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -568,7 +446,7 @@ int config_bmc_ntp_server_set(const char *ntp_server)
 
 	strncpy(config_data.bmc_ntp_server, ntp_server, MAX_NTP_SERVER_LEN);
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -614,7 +492,7 @@ int config_bmc_password_set(const char *password)
 
 	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -668,7 +546,7 @@ int config_host_auto_poweron_set(bool on)
 		config_data.host_auto_poweron = 0;
 	}
 
-	rc = write_config();
+	rc = config_write(&config_data, sizeof(config_data));
 	if (rc < 0) {
 		LOG_ERR("Configuration could not be saved (err=%d)", rc);
 		return rc;
@@ -735,29 +613,13 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 
 SHELL_CMD_REGISTER(config, &sub_config_cmds, "Configuration commands", NULL);
 
-int config_clear(void)
-{
-	int rc;
-
-	if (!config_exists())
-		return 0; /* Already cleared */
-
-	rc = fs_unlink(CONFIG_FILE);
-	if (rc) {
-		LOG_ERR("Could not remove file %s (err=%d)", CONFIG_FILE, rc);
-		return rc;
-	}
-
-	return 0;
-}
-
 int config_init(void)
 {
 	int ondisk_size;
 	int rc;
 
 	if (fs_enabled()) {
-		rc = read_config();
+		rc = config_read(&config_data, sizeof(config_data));
 		if (rc < 0) {
 			LOG_ERR("Error loading config");
 			return rc;
@@ -820,7 +682,7 @@ int config_init(void)
 
 	/* Write back any newly initialised fields. */
 	if (fs_enabled() && ondisk_size != sizeof(config_data)) {
-		rc = write_config();
+		rc = config_write(&config_data, sizeof(config_data));
 		if (rc < 0) {
 			LOG_ERR("Could not update config file, continuing without persistent storage");
 			return fs_exit();

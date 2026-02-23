@@ -42,44 +42,32 @@
      status = "disabled";
 };
 
-/*
- * The board overlays are designed for MCUBOOT bootloader, because they put
- * the app image at != 0 address, which is not supported for a direct loaded
- * image. So create our own.
- *
- * We probably should use MCUBOOT, it can handle two images and allows use
- * to use the first few small blocks for app storage which is more efficient
- * use of space and will have better write amp properties with more erase
- * blocks.
- *
- * But just get something working for now.
- */
+/delete-node/ &boot_partition;
+/delete-node/ &storage_partition;
 /delete-node/ &slot0_partition;
 /delete-node/ &slot1_partition;
 /delete-node/ &scratch_partition;
-/delete-node/ &storage_partition;
 
 &flash0 {
-	partitions {
-		compatible = "fixed-partitions";
-		#address-cells = <1>;
-		#size-cells = <1>;
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
 
-		/*
-		 * Sectors 0-3 (4*32 kbytes) + 4 (128 kbytes) + 5-7 (3*256 kbytes)
-		 * are for the application image.
-		 */
-		slot0_partition: partition@0 {
-			label = "image-0";
-			reg = <0x00000000 DT_SIZE_K(1024)>;
-		};
+        boot_partition: partition@0 {
+            label = "mcuboot";
+            reg = <0x00000000 DT_SIZE_K(32)>;
+        };
 
-		/*
-		 * Sector 8-10 (3*256 kbyte) are for application persistent storage.
-		 */
-		storage_partition: partition@100000 {
-			label = "storage";
-			reg = <0x00100000 DT_SIZE_K(768)>;
-		};
-	};
+        /* 3*32KB, enough for NVS storage */
+        storage_partition: partition@8000 {
+            label = "storage";
+            reg = <0x00008000 DT_SIZE_K(96)>;
+        };
+
+        slot0_partition: partition@20000 {
+            label = "image-0";
+            reg = <0x00020000 DT_SIZE_K(1024)>;
+        };
+    };
 };
