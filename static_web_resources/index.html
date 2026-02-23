@@ -308,7 +308,7 @@
 				<img src="logo.jpeg" alt="WallaBMC" style="max-width: 200px; height: auto;">
 			</div>
 			<form class="login-form" onsubmit="event.preventDefault(); connectToBmc();">
-				<input type="password" id="password" placeholder="Password (default: 'admin')">
+				<input type="password" id="password" placeholder="Password (default: 'admin')" autofocus>
 				<button type="submit">Login</button>
 			</form>
 			<p id="login-error" style="text-align: center; color: var(--danger); margin-top: 15px;" class="hidden"></p>
@@ -624,9 +624,11 @@
 			basicAuthHeader = null;
 			wsAuthMsg = null;
 
-			document.getElementById('password').value = '';
+			const pw = document.getElementById('password');
+			pw.value = '';
 			hide('dashboard-section');
 			show('login-section');
+			pw.focus();
 		}
 
 		async function refreshSystemData() {
