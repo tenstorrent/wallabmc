@@ -178,6 +178,10 @@ config REDFISH_SYSTEM_MEMORY_GIB
 	help
 	  Total system memory in GiB for Redfish MemorySummary. 0 shows as N/A.
 
+config HTTP_SERVER_MAX_HEADER_LEN
+	int
+	default 48 # Basic auth header + 15 character password is 34 characters
+
 endif # REDFISH
 
 config APP_WEB
