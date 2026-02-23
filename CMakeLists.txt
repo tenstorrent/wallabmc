@@ -7,6 +7,16 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(wallabmc)
 
+if(BOARD STREQUAL "qemu_cortex_m3")
+	if(SYSBUILD)
+		message(FATAL_ERROR "qemu_cortex_m3 must NOT be built with sysbuild (e.g., no --sysbuild argument)")
+	endif()
+else()
+	if(NOT SYSBUILD)
+		message(FATAL_ERROR "Hardware boards must be built with sysbuild (e.g., --sysbuild argument)")
+	endif()
+endif()
+
 # Get project git SHA1 if not provided via CMake variable
 if(NOT DEFINED PROJECT_GIT_SHA)
 	# Use the shell script to get git SHA1
