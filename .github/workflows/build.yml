@@ -48,6 +48,13 @@ jobs:
       BOARD: ${{ matrix.board }}
 
     steps:
+      - name: Show refs
+        shell: bash
+        run: |
+          echo "github.head_ref: ${{ github.head_ref }}"
+          echo "github.ref: ${{ github.ref }}"
+          echo "github.ref_name: ${{ github.ref_name }}"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
