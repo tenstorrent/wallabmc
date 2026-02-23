@@ -1,25 +1,26 @@
 # Quick installation
 
 SiFive made an openocd cfg public [here](https://github.com/sifiveinc/hifive-premier-p550-tools/blob/master/mcu-firmware/stm32_openocd.cfg)
-
-To program the this built zephyr image, do this:
-
-
 ```
 wget https://raw.githubusercontent.com/sifiveinc/hifive-premier-p550-tools/refs/heads/master/mcu-firmware/stm32_openocd.cfg
-openocd -f stm32_openocd.cfg -c 'init; halt; program zephyr.elf; reset; exit'
 ```
 
-You can download the WallaBMC p550 zephyr.elf from a sucessful github actions run from [here](https://github.com/tenstorrent/wallabmc/actions)
-Look for the `wallabmc-firmware-hifive_premier_p550_mcu` artifact (github doesn't provide a static link)
+Connect a USB-C cable to the P550 debug port.
 
-Or you can build it yourself from source here with:
-
+You can download the WallaBMC p550 images from a successful github actions run from [here](https://github.com/tenstorrent/wallabmc/actions).
+Look for the `wallabmc-firmware-hifive_premier_p550_mcu` artifact (github doesn't provide a static link). Unzip this and do:
 ```
-west build -b hifive_premier_p550_mcu app
+openocd -f stm32_openocd.cfg -c 'init; halt; flash write_image erase mcuboot.hex ; flash write_image erase wallabmc.signed.hex ; reset; exit'
 ```
 
-# Flash standard firmware from Sifive
+This should flash and then restart the BMC. You should then see output on the USB UART. (_NOTE: There are two UARTS on the USB. One for the host p550 and one for the STM32_)
+
+If you are building yourself with west, follow the build instructions from the [README](../README.md) and then flash with:
+```
+openocd -f stm32_openocd.cfg -c 'init; halt; flash write_image erase build/mcuboot/zephyr/zephyr.hex ; flash write_image erase build/wallabmc/zephyr/zephyr.signed.hex ; reset; exit'
+```
+
+# Flash standard firmware from SiFive
 
 If you want to go back to the original firmware, do this:
 
