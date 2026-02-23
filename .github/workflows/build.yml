@@ -7,6 +7,15 @@ on:
     - cron: '0 0 * * 5'
   workflow_dispatch:
 
+# Only run one build at a time, cancel in-progress builds if a new build is started.
+# This means if you push multiple times to your branch, running builds will be
+# cancelled and only the last commit will result in a full build.
+# When a PR is open the pull request build should override the build of the
+# branch itself.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
