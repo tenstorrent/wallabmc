@@ -43,7 +43,28 @@ Required tools:
 * A toolchain for your target platform (ARM or RISC-V)
 * OpenOCD or appropriate flashing tool for your hardware
 
+
+### Quick instructions (existing zephyr build env)
+
+Clone the repo into your home dir
+
+```
+cd $HOME
+git clone https://github.com/tenstorrent/wallabmc.git
+```
+
+Go to your zephyr build dir:
+
+```
+west build --sysbuild -b nucleo_f767zi ~/wallabmc
+```
+Where `nucleo_f767zi` can be replaced with the boards in [Hardware Support](#hardware-support). 
+
+See [flashing](#flashing) on how to install
+
 ### Installation
+
+For those without a pre-existing zephyr build env
 
 #### Initialize Workspace
 
@@ -62,12 +83,11 @@ west update
 To build the application, run the following command:
 
 ```
-cd wallabmc
-west build --sysbuild -b $BOARD app
+cd zephyr
+west build --sysbuild -b nucleo_f767zi ../wallabmc
 ```
-where $BOARD is the target board.
 
-Try removing the build/ directory if you get build errors.
+Where `nucleo_f767zi` can be replaced with the boards in [Hardware Support](#Hardware-Support)
 
 ### Supported boards:
 
@@ -79,13 +99,14 @@ See the [Hardware Support](#Hardware-Support) section.
 west flash --runner openocd
 ```
 
-Alternatively, use the ``build/wallabmc/zephyr/zephyr.signed.hex`` and
-``build/mcuboot/zephyr/zephyr.hex`` files, and run the openocd commands:
+Alternatively, use the `build/wallabmc/zephyr/zephyr.signed.hex` and
+`build/mcuboot/zephyr/zephyr.hex` files, and run the openocd commands:
 
 ```
 flash write_image erase build/mcuboot/zephyr/zephyr.hex
 flash write_image erase build/wallabmc/zephyr/zephyr.signed.hex
 ```
+Also see instructions on [flashing the p550](boards/sifive/hifive_premier_p550_mcu/support/README.md)
 
 ### Running
 
