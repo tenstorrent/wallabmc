@@ -619,10 +619,34 @@ static int cmd_config_show(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
+static int cmd_config_clear(const struct shell *sh, size_t argc, char **argv)
+{
+	int rc;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	if (!is_boot_finished()) {
+		shell_error(sh, "must wait for boot to finish");
+		return -EAGAIN;
+	}
+
+	rc = config_clear();
+	if (rc) {
+		shell_error(sh, "could not clear config (err=%d)", rc);
+		return rc;
+	}
+
+	bmc_reboot();
+
+	return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_config_cmds,
 	SHELL_CMD(show,	NULL, "Show configuration.", &cmd_config_show),
 	SHELL_CMD(bmc,	&sub_config_bmc_cmds, "BMC configuration commands.", NULL),
 	SHELL_CMD(host,	&sub_config_host_cmds, "Host configuration commands.", NULL),
+	SHELL_CMD(clear_and_reboot, NULL, "Clear configuration and reboot system.", &cmd_config_clear),
 	SHELL_SUBCMD_SET_END
 );
 
