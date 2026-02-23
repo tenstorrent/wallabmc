@@ -4,7 +4,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>WallaBMC Admin Dashboard</title>
-	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+	<link rel="icon" type="image/png" href="/favicon.png" sizes="32x32">
+	<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 	<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-attach@0.9.0/lib/xterm-addon-attach.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
@@ -125,6 +126,15 @@
 			font-size: 0.75rem;
 			text-transform: uppercase;
 		}
+
+		/* To label non-input items */
+		.info-item-label {
+			font-weight: 600;
+			color: var(--text-muted);
+			font-size: 0.75rem;
+			text-transform: uppercase;
+		}
+
 
 		.data-value {
 			font-family: monospace;
@@ -299,8 +309,7 @@
 				<img src="logo.jpeg" alt="WallaBMC" style="max-width: 200px; height: auto;">
 			</div>
 			<form class="login-form" onsubmit="event.preventDefault(); connectToBmc();">
-				<input type="text" id="username" placeholder="Username" value="admin" class="hidden">
-				<input type="password" id="password" placeholder="Password (default: 'admin')">
+				<input type="password" id="password" placeholder="Password (default: 'admin')" autofocus>
 				<button type="submit">Login</button>
 			</form>
 			<p id="login-error" style="text-align: center; color: var(--danger); margin-top: 15px;" class="hidden"></p>
@@ -329,20 +338,20 @@
 				</div>
 
 				<div class="grid-3-col">
-					<div class="info-item"><label>Board</label><span class="data-value" id="sys-name">Loading...</span></div>
-					<div class="info-item"><label>Manufacturer</label><span class="data-value" id="sys-manufacturer">Loading...</span></div>
-					<div class="info-item"><label>Model</label><span class="data-value" id="sys-model">Loading...</span></div>
-					<div class="info-item"><label>Serial</label><span class="data-value" id="sys-serial">Loading...</span></div>
-					<div class="info-item"><label>CPU</label><span class="data-value" id="sys-cpu-model">Loading...</span></div>
-					<div class="info-item"><label>CPU Count</label><span class="data-value" id="sys-cpu">Loading...</span></div>
-					<div class="info-item"><label>Memory</label><span class="data-value" id="sys-memory">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Board</span><span class="data-value" id="sys-name">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Manufacturer</span><span class="data-value" id="sys-manufacturer">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Model</span><span class="data-value" id="sys-model">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Serial</span><span class="data-value" id="sys-serial">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">CPU</span><span class="data-value" id="sys-cpu-model">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">CPU Count</span><span class="data-value" id="sys-cpu">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Memory</span><span class="data-value" id="sys-memory">Loading...</span></div>
 				</div>
 			</div>
 
 			<div class="card">
 				<h2>Host Power Control</h2>
 				<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-					<label style="font-weight: bold; color: var(--text-muted); font-size: 0.8rem;">CURRENT STATE:</label>
+					<span class="info-item-label" style="font-weight: bold; color: var(--text-muted); font-size: 0.8rem;">CURRENT STATE:</span>
 					<span id="power-state-badge" class="badge">Unknown</span>
 				</div>
 
@@ -362,7 +371,10 @@
 				</div>
 
 				<div class="grid-4-col" style="margin-bottom: 25px;">
-					<div class="info-item"><label>Name</label><span class="data-value" id="bmc-name">Loading...</span></div>
+					<div class="info-item">
+						<span class="info-item-label">Name</span>
+						<span class="data-value" id="bmc-name">Loading...</span>
+					</div>
 				</div>
 
 				<h3>Security</h3>
@@ -387,7 +399,8 @@
 				<h3>Time</h3>
 				<div class="grid-4-col">
 					<div class="info-item">
-						<label>Current Time</label><span class="data-value" id="bmc-date-time">Loading...</span>
+						<span class="info-item-label">Current Time</span>
+						<span class="data-value" id="bmc-date-time">Loading...</span>
 					</div>
 					<div class="info-item">
 						<button onclick="syncTimeToBrowser()">Sync to browser</button>
@@ -411,14 +424,14 @@
 						<label for="cfg-hostname">Hostname</label>
 						<input type="text" id="cfg-hostname" placeholder="New Hostname">
 					</div>
-					<div class="info-item"><span class="data-value" /></div>
-					<div class="info-item"><span class="data-value" /></div>
-					<div class="info-item"><span class="data-value" /></div>
+					<div class="info-item"><span class="data-value"></span></div>
+					<div class="info-item"><span class="data-value"></span></div>
+					<div class="info-item"><span class="data-value"></span></div>
 
-					<div class="info-item"><label>Address type</label><span class="data-value" id="bmc-address-type">Loading...</span></div>
-					<div class="info-item"><label>IP Address</label><span class="data-value" id="bmc-ip-address">Loading...</span></div>
-					<div class="info-item"><label>Subnet Mask</label><span class="data-value" id="bmc-subnet">Loading...</span></div>
-					<div class="info-item"><label>Gateway</label><span class="data-value" id="bmc-gateway">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Address type</span><span class="data-value" id="bmc-address-type">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">IP Address</span><span class="data-value" id="bmc-ip-address">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Subnet Mask</span><span class="data-value" id="bmc-subnet">Loading...</span></div>
+					<div class="info-item"><span class="info-item-label">Gateway</span><span class="data-value" id="bmc-gateway">Loading...</span></div>
 
 					<div class="info-item">
 						<label for="cfg-dhcp">IP Assignment</label>
@@ -527,7 +540,7 @@
 		}
 
 		async function authenticate() {
-			const user = document.getElementById('username').value;
+			const user = 'admin';
 			const pass = document.getElementById('password').value;
 
 			basicAuthHeader = 'Basic ' + btoa(user + ":" + pass);
@@ -545,7 +558,7 @@
 		}
 
 		async function connectToBmc() {
-			const user = document.getElementById('username').value;
+			const user = 'admin';
 			const pass = document.getElementById('password').value;
 			if (!user || !pass)
 				return;
@@ -612,9 +625,11 @@
 			basicAuthHeader = null;
 			wsAuthMsg = null;
 
-			document.getElementById('password').value = '';
+			const pw = document.getElementById('password');
+			pw.value = '';
 			hide('dashboard-section');
 			show('login-section');
+			pw.focus();
 		}
 
 		async function refreshSystemData() {
