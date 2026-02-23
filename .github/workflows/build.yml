@@ -77,7 +77,7 @@ jobs:
           west init -l ../wallabmc
 
           # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
-          west update --narrow -o=--depth=1
+          west update --narrow -o=--depth=10000 -o=--tags
 
       - name: Build WallaBMC (sysbuild boards)
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
