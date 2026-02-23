@@ -69,7 +69,7 @@ where $BOARD is the target board.
 
 ### Supported boards:
 
-See the [Hardware Support](#Hardware Support) section.
+See the [Hardware Support](#Hardware-Support) section.
 
 ### Flashing
 
