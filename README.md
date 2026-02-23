@@ -8,7 +8,7 @@ WallaBMC is a simple, lightweight Baseboard Management Controller (BMC) firmware
 
 WallaBMC is designed for embedded systems requiring BMC capabilities without the complexity of full-featured BMC solutions. It provides core functionality for monitoring and managing host systems through industry-standard interfaces.
 
-## Features
+### Features
 
 * **LED Status Indicators**: Visual feedback for system status
 * **IPv4 Networking**: Static IP or DHCP with mDNS hostname resolution
@@ -19,14 +19,17 @@ WallaBMC is designed for embedded systems requiring BMC capabilities without the
 * **Host Power Control**: Power on/off management for host systems
 * **Host Console**: Serial console access (coming soon)
 
-## Hardware Support
+### Hardware Support
 
 WallaBMC currently supports the following hardware platforms:
-* **SiFive HiFive Premier P550 MCU**: RISC-V based platform
-* **STM32 Nucleo F767ZI**: ARM Cortex-M7 development board (standalone, no host CPU)
-* **qemu**:  see [run_qemu_ci.py](scripts/run_qemu_ci.py)
 
-## Getting Started
+| Hardware | Zephyr board name | Description |
+| --- | --- | --- |
+| **SiFive HiFive Premier P550 MCU** | hifive_premier_p550_mcu | RISC-V based platform |
+| **STM32 Nucleo F767ZI** | nucleo_f767zi | ARM Cortex-M7 development board (standalone, no host CPU) |
+| **qemu** | qemu_cortex_m3 | see [run_qemu_ci.py](scripts/run_qemu_ci.py) |
+
+## Using
 
 ### Prerequisites
 
@@ -66,9 +69,7 @@ where $BOARD is the target board.
 
 ### Supported boards:
 
-* ``hifive_premier_p550_mcu`` see [README.md](boards/sifive/hifive_premier_p550_mcu/support/README.md)
-* ``nucleo_f767zi``
-* ``qemu`` see [run_qemu_ci.py](scripts/run_qemu_ci.py)
+See the [Hardware Support](#Hardware-Support) section.
 
 ### Flashing
 
@@ -112,6 +113,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for information on how to contribute to t
 ## License
 
 This project is licensed under the terms described in:
-* [LICENSE](LICENSE) – full license text
+
+* [LICENSE](LICENSE) – code license
 * [LICENSE_understanding.txt](LICENSE_understanding.txt) – license summary and clarification
-* [LICENSE-DOCS](LICENSE-DOCS) – documentation licensing terms
+* [LICENSE-DOCS](LICENSE-DOCS) – Creative Commons license for all documentation and logos
