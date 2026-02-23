@@ -23,11 +23,11 @@ WallaBMC is designed for embedded systems requiring BMC capabilities without the
 
 WallaBMC currently supports the following hardware platforms:
 
-| Hardware | |
-| --- | --- |
-| **SiFive HiFive Premier P550 MCU** | RISC-V based platform |
-| **STM32 Nucleo F767ZI** | ARM Cortex-M7 development board (standalone, no host CPU) |
-| **qemu** | see [run_qemu_ci.py](scripts/run_qemu_ci.py) |
+| Hardware | Zephyr board name | Description |
+| --- | --- | --- |
+| **SiFive HiFive Premier P550 MCU** | hifive_premier_p550_mcu | RISC-V based platform |
+| **STM32 Nucleo F767ZI** | nucleo_f767zi | ARM Cortex-M7 development board (standalone, no host CPU) |
+| **qemu** | qemu_cortex_m3 | see [run_qemu_ci.py](scripts/run_qemu_ci.py) |
 
 ## Using
 
