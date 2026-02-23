@@ -110,13 +110,13 @@ config NET_PKT_TX_COUNT
 
 config NET_BUF_RX_COUNT
 	int
-	default 64 if APP_CRYPTO
-	default 48
+	default 96 if APP_CRYPTO
+	default 64
 
 config NET_BUF_TX_COUNT
 	int
-	default 64 if APP_CRYPTO
-	default 48
+	default 96 if APP_CRYPTO
+	default 64
 
 config NET_SOCKETS_TLS_MAX_CONTEXTS
 	int
@@ -180,6 +180,14 @@ config REDFISH_SYSTEM_MEMORY_GIB
 	  Total system memory in GiB for Redfish MemorySummary. 0 shows as N/A.
 
 endif # REDFISH
+
+config HTTP_SERVER_NUM_SERVICES
+	int
+	default 2 if APP_HTTPS # default 1 (listen on just 80)
+
+config HTTP_SERVER_MAX_CLIENTS
+	int
+	default 8 if APP_WEB
 
 config APP_WEB
 	bool "Web server"
