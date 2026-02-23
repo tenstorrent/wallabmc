@@ -57,6 +57,29 @@ struct config_data {
 	uint32_t bmc_default_ip4_gw;
 } __packed;
 
+BUILD_ASSERT(strlen(CONFIG_DEFAULT_ADMIN_PASSWORD) <= MAX_PW_LEN);
+
+/*
+ * strlcpy() is not available in Zephyr, define it ourselves.
+ *
+ * > strlcpy() copies up to dstsize - 1 characters from the string src to dst,
+ * > NUL-terminating the result if dstsize is not 0.
+ * > strlcpy() returns the total length of the string it tried to create,
+ * > ie. the length of src.
+ */
+static size_t strlcpy(char *ZRESTRICT dst, const char *ZRESTRICT src, size_t dstsize)
+{
+	size_t src_len = strlen(src);
+
+	if (dstsize != 0) {
+		size_t copy_len = min(src_len, dstsize - 1);
+		memcpy(dst, src, copy_len);
+		dst[copy_len] = '\0';
+	}
+
+	return src_len;
+}
+
 /*
  * littlefs can keep up to 64 bytes of data in the file/
  * inode rather than require a new data sector for it.
@@ -612,7 +635,12 @@ int config_bmc_password_set(const char *password)
 {
 	int rc;
 
-	strncpy(config_data.bmc_admin_password, password, MAX_PW_LEN);
+	if (strlen(password) > MAX_PW_LEN) {
+		LOG_ERR("Password too long, max length is %d characters", MAX_PW_LEN);
+		return -EINVAL;
+	}
+
+	strlcpy(config_data.bmc_admin_password, password, sizeof(config_data.bmc_admin_password));
 
 	rc = write_config();
 	if (rc < 0) {
@@ -629,6 +657,8 @@ int config_bmc_password_set(const char *password)
 
 static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **argv)
 {
+	int rc;
+
 	ARG_UNUSED(argc);
 
 	if (!is_boot_finished()) {
@@ -636,7 +666,12 @@ static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **a
 		return -EAGAIN;
 	}
 
-	config_bmc_password_set(argv[1]);
+	rc = config_bmc_password_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC admin password (err=%d)", rc);
+		return rc;
+	}
+
 	shell_info(sh, "BMC admin password updated");
 
 	return 0;
@@ -803,7 +838,7 @@ int config_init(void)
 		config_data.host_auto_poweron = 0;
 
 	if (!IS_ONDISK(bmc_admin_password))
-		strncpy(config_data.bmc_admin_password, "admin", MAX_PW_LEN);
+		strlcpy(config_data.bmc_admin_password, CONFIG_DEFAULT_ADMIN_PASSWORD, sizeof(config_data.bmc_admin_password));
 
 	if (!IS_ONDISK(bmc_use_ntp))
 		config_data.bmc_use_ntp = 1;
