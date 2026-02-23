@@ -98,6 +98,7 @@ if(CONFIG_APP_WEB)
   foreach(web_resource
     index.html
     logo.jpeg
+    favicon.png
   )
     generate_inc_file_for_target(app
       static_web_resources/${web_resource}
