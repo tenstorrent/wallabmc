@@ -8,11 +8,7 @@
 #ifndef __CERTIFICATE_H__
 #define __CERTIFICATE_H__
 
-enum tls_tag {
-        /** Used for both the public and private server keys */
-        HTTP_SERVER_CERTIFICATE_TAG,
-};
-
+#if defined(CONFIG_APP_HTTPS_PUBLIC_KEY)
 static const unsigned char server_certificate[] = {
 #include "server_cert.der.inc"
 };
@@ -21,5 +17,6 @@ static const unsigned char server_certificate[] = {
 static const unsigned char private_key[] = {
 #include "server_privkey.der.inc"
 };
+#endif
 
 #endif /* __CERTIFICATE_H__ */

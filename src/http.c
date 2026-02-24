@@ -32,11 +32,34 @@ DEFINE_WEBSOCKET_SERVICE(http_service);
 #endif
 
 #if defined(CONFIG_APP_HTTPS)
+
 #include "certificate.h"
 
+#ifndef CONFIG_NET_SOCKETS_SOCKOPT_TLS
+#error "CONFIG_NET_SOCKETS_SOCKOPT_TLS=n"
+#endif
+
+#if defined(CONFIG_APP_HTTPS_PSK)
+#ifndef CONFIG_MBEDTLS_KEY_EXCHANGE_PSK_ENABLED
+#error "CONFIG_MBEDTLS_KEY_EXCHANGE_PSK_ENABLED=n"
+#endif
+#endif
+
+enum tls_tag {
+#if defined(CONFIG_APP_HTTPS_PUBLIC_KEY)
+        /** Used for both the public and private server keys */
+        HTTP_SERVER_CERTIFICATE_TAG,
+#endif
+#if defined(CONFIG_APP_HTTPS_PSK)
+        PSK_TAG,
+#endif
+};
+
 static const sec_tag_t sec_tag_list_verify_none[] = {
+#if defined(CONFIG_APP_HTTPS_PUBLIC_KEY)
 		HTTP_SERVER_CERTIFICATE_TAG,
-#if defined(CONFIG_MBEDTLS_KEY_EXCHANGE_PSK_ENABLED)
+#endif
+#if defined(CONFIG_APP_HTTPS_PSK)
 		PSK_TAG,
 #endif
 	};
@@ -54,7 +77,7 @@ static int setup_tls(void)
 {
 	int err = 0;
 
-#if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS)
+#if defined(CONFIG_APP_HTTPS_PUBLIC_KEY)
 	err = tls_credential_add(HTTP_SERVER_CERTIFICATE_TAG,
 				 TLS_CREDENTIAL_PUBLIC_CERTIFICATE,
 				 server_certificate,
@@ -71,27 +94,33 @@ static int setup_tls(void)
 		LOG_ERR("Failed to register private key: %d", err);
 		return err;
 	}
+#endif
 
-#if defined(CONFIG_MBEDTLS_KEY_EXCHANGE_PSK_ENABLED)
-	err = tls_credential_add(PSK_TAG,
-				 TLS_CREDENTIAL_PSK,
-				 psk,
-				 sizeof(psk));
-	if (err < 0) {
-		LOG_ERR("Failed to register PSK: %d", err);
-		return err;
-	}
+#if defined(CONFIG_APP_HTTPS_PSK)
+	const char *psk;
+	int psk_len;
+	if (config_bmc_https_psk(&psk, &psk_len)) {
+		err = tls_credential_add(PSK_TAG,
+					 TLS_CREDENTIAL_PSK,
+					 psk,
+					 psk_len);
+		if (err < 0) {
+			LOG_ERR("Failed to register PSK: %d", err);
+			return err;
+		}
 
-	err = tls_credential_add(PSK_TAG,
-				 TLS_CREDENTIAL_PSK_ID,
-				 psk_id,
-				 sizeof(psk_id) - 1);
-	if (err < 0) {
-		LOG_ERR("Failed to register PSK ID: %d", err);
-		return err;
+		static const char psk_id[] = "WallaBMC";
+		err = tls_credential_add(PSK_TAG,
+					 TLS_CREDENTIAL_PSK_ID,
+					 psk_id,
+					 sizeof(psk_id) - 1);
+		if (err < 0) {
+			LOG_ERR("Failed to register PSK ID: %d", err);
+			return err;
+		}
 	}
-#endif /* defined(CONFIG_MBEDTLS_KEY_EXCHANGE_PSK_ENABLED) */
-#endif /* defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS) */
+#endif
+
 	return err;
 }
 #else /* defined(CONFIG_APP_HTTPS) */
