@@ -14,6 +14,13 @@ LOG_MODULE_REGISTER(wallabmc_fs, LOG_LEVEL_INF);
 
 #include "fs.h"
 
+/*
+ * Some STM32 internal flash seems to have an issue where writes randomly fail.
+ * Noticed with the smaller sectors at the beginning of the flash space used
+ * for app storage.  Try to work around it by retrying write EIO fails.
+ */
+#define FLASH_WRITE_RETRY_COUNT 3
+
 #if defined(CONFIG_PERSISTENT_STORAGE) && FIXED_PARTITION_EXISTS(STORAGE_PARTITION_LABEL)
 #define STORAGE_PARTITION_ID		FIXED_PARTITION_ID(STORAGE_PARTITION_LABEL)
 #define STORAGE_PARTITION_DEVICE	FIXED_PARTITION_DEVICE(STORAGE_PARTITION_LABEL)
@@ -77,12 +84,18 @@ static int umount_fs(void)
 int fs_clear(void)
 {
 	int rc;
+	int retry_count = 0;
 
 	if (!fs_enabled())
 		return -ENODEV;
 
+again:
 	rc = nvs_clear(&nvs_fs);
 	if (rc) {
+		if (rc == -EIO && retry_count < FLASH_WRITE_RETRY_COUNT) {
+			retry_count++;
+			goto again;
+		}
 		LOG_ERR("Could not clear config (err=%d)", rc);
 		return rc;
 	}
@@ -115,15 +128,22 @@ ssize_t fs_key_read(uint16_t id, void *buf, size_t size)
 ssize_t fs_key_write(uint16_t id, const void *buf, size_t size)
 {
 	ssize_t rc;
+	int retry_count = 0;
 
 	if (!fs_enabled())
 		return -ENODEV;
 
+again:
 	rc = nvs_write(&nvs_fs, id, buf, size);
 	if (rc < 0) {
+		if (rc == -EIO && retry_count < FLASH_WRITE_RETRY_COUNT) {
+			retry_count++;
+			goto again;
+		}
 		LOG_ERR("Could not write config id %u (err=%zd)", id, rc);
 		return rc;
 	}
+
 	if (rc == 0) {
 		LOG_DBG("Writing unchanged data config id %u", id);
 		return size;
