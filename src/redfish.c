@@ -27,6 +27,7 @@
 #include "config.h"
 #include "power.h"
 #include "rtc.h"
+#include "vpd.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -743,11 +744,11 @@ static int manager_patch_handler(char *in_buf, size_t in_buf_len)
 /* GET /redfish/v1/Managers/bmc */
 static int manager_get_handler(char *out_buf, size_t out_buf_len)
 {
-	const struct redfish_manager manager = {
+	struct redfish_manager manager = {
 		.odata_id = "/redfish/v1/Managers/bmc",
 		.odata_type = "#Manager.v1_11_0.Manager",
 		.id = "bmc",
-		.uuid = "58893887-8974-2487-2389-389233423423",
+		.uuid = NULL,
 		.name = "WallaBMC",
 		.date_time = get_iso_time(),
 		.ethernet_interfaces = {
@@ -755,6 +756,11 @@ static int manager_get_handler(char *out_buf, size_t out_buf_len)
 		},
 	};
 	int ret;
+
+	ret = get_bmc_uuid_string(&manager.uuid);
+	if (ret < 0) {
+		LOG_ERR("Failed to get BMC UUID: %d", ret);
+	}
 
 	ret = json_obj_encode_buf(manager_descr, ARRAY_SIZE(manager_descr),
 				  &manager, out_buf, out_buf_len);
