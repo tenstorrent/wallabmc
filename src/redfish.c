@@ -20,6 +20,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/base64.h>
+#include <zephyr/sys/uuid.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -717,6 +719,42 @@ static const char *get_iso_time(void)
 	return str;
 }
 
+static const struct uuid *get_bmc_uuid(void)
+{
+	static struct uuid bmc_uuid;
+	static bool created = false;
+
+	struct uuid uuid_v5_ns;
+	uint8_t mcu_uid[16];
+	ssize_t length;
+	int ret;
+
+	if (created)
+		return &bmc_uuid;
+
+	ret = uuid_from_string(CONFIG_WALLABMC_UUID_NS, &uuid_v5_ns);
+	if (ret < 0) {
+		LOG_ERR("Could not generate namespace UUID");
+		return NULL;
+	}
+
+	length = hwinfo_get_device_id(mcu_uid, sizeof(mcu_uid));
+	if (length < 0) {
+		LOG_ERR("Could not get device UID");
+		return NULL;
+	}
+
+	ret = uuid_generate_v5(&uuid_v5_ns, mcu_uid, length, &bmc_uuid);
+	if (ret < 0) {
+		LOG_ERR("Could not generate device UUID");
+		return NULL;
+	}
+
+	created = true;
+
+	return &bmc_uuid;
+}
+
 /* PATCH /redfish/v1/Managers/bmc */
 static int manager_patch_handler(char *in_buf, size_t in_buf_len)
 {
@@ -743,11 +781,12 @@ static int manager_patch_handler(char *in_buf, size_t in_buf_len)
 /* GET /redfish/v1/Managers/bmc */
 static int manager_get_handler(char *out_buf, size_t out_buf_len)
 {
+	char uuid[UUID_STR_LEN];
 	const struct redfish_manager manager = {
 		.odata_id = "/redfish/v1/Managers/bmc",
 		.odata_type = "#Manager.v1_11_0.Manager",
 		.id = "bmc",
-		.uuid = "58893887-8974-2487-2389-389233423423",
+		.uuid = uuid,
 		.name = "WallaBMC",
 		.date_time = get_iso_time(),
 		.ethernet_interfaces = {
@@ -755,6 +794,10 @@ static int manager_get_handler(char *out_buf, size_t out_buf_len)
 		},
 	};
 	int ret;
+
+	ret = uuid_to_string(get_bmc_uuid(), uuid);
+	if (ret < 0)
+		LOG_ERR("Failed to encode UUID: %d", ret);
 
 	ret = json_obj_encode_buf(manager_descr, ARRAY_SIZE(manager_descr),
 				  &manager, out_buf, out_buf_len);
