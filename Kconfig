@@ -3,6 +3,12 @@
 
 mainmenu "WallaBMC"
 
+# This UUID should not be changed, it is a namespace from which
+# to generate other UUIDs for WallaBMC.
+config WALLABMC_UUID_NS
+	string
+	default "6ae4c3c7-fff0-472a-a77c-6f3f5a09ee7c"
+
 config APP_DNS_RESOLVE
 	bool
 	select REQUIRES_FULL_LIBC
@@ -160,6 +166,9 @@ config REDFISH
 	select HTTP_SERVER_CAPTURE_HEADERS
 	select JSON_LIBRARY
 	select BASE64
+	select UUID
+	select UUID_V5
+	select HWINFO
 
 if REDFISH
 

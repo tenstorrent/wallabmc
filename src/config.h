@@ -4,6 +4,9 @@
  */
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
+
+struct uuid;
+
 int config_init(void);
 const char *config_bmc_hostname(void);
 int config_bmc_hostname_set(const char *hostname);
