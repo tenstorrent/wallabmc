@@ -24,11 +24,16 @@ LOG_MODULE_REGISTER(wallabmc_button, LOG_LEVEL_INF);
 
 static const struct gpio_dt_spec button = GPIO_DT_SPEC_GET_OR(USER_BUTTON_NODE, gpios,
 							      {0});
-static struct gpio_callback button_cb_data;
 
-static void button_work_fn(struct k_work *work)
+static void reset_work_fn(struct k_work *work)
 {
+	int val = gpio_pin_get_dt(&button);
 	int rc;
+
+	if (val != 1)
+		return;
+
+	LOG_INF("Button held, rebooting.");
 
 	rc = config_clear();
 	if (rc) {
@@ -39,24 +44,33 @@ static void button_work_fn(struct k_work *work)
 	bmc_reboot();
 }
 
-static K_WORK_DEFINE(button_work, button_work_fn);
+static K_WORK_DELAYABLE_DEFINE(reset_work, reset_work_fn);
+
+#define RESET_HOLD_TIME_MS 1000
+
+static void button_work_fn(struct k_work *work)
+{
+	int val = gpio_pin_get_dt(&button);
+	if (val == 1) {
+		/* Pressed */
+		k_work_schedule(&reset_work, K_MSEC(RESET_HOLD_TIME_MS));
+	} else if (val == 0) {
+		/* Released */
+		k_work_cancel_delayable(&reset_work);
+		LOG_INF("Hold button for 1s to clear config and reset");
+	}
+}
+
+static K_WORK_DELAYABLE_DEFINE(button_work, button_work_fn);
+
+#define DEBOUNCE_TIME_MS 1
+
+static struct gpio_callback button_cb_data;
 
 static void button_pressed(const struct device *dev,
 			   struct gpio_callback *cb, uint32_t pins)
 {
-	static bool was_pressed = false;
-
-	/*
-	 * Interrupt fires a lot while the button is held, so only run this once,
-	 * to avoid spamming the log or writing a lot to the fs.
-	 */
-	if (was_pressed)
-		return;
-	was_pressed = true;
-
-	LOG_INF("Button pressed: resetting to factory config and rebooting");
-
-	k_work_submit(&button_work);
+	k_work_schedule(&button_work, K_MSEC(DEBOUNCE_TIME_MS));
 }
 
 int button_init(void)
@@ -76,8 +90,8 @@ int button_init(void)
 		return ret;
 	}
 
-	ret = gpio_pin_interrupt_configure_dt(&button,
-					      GPIO_INT_EDGE_TO_ACTIVE);
+	/* Interrupt on press and release */
+	ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_BOTH);
 	if (ret != 0) {
 		LOG_ERR("Error: button device %s failed to configure interrutp on pin %d (err=%d)",
 			button.port->name, button.pin, ret);
