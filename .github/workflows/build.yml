@@ -22,66 +22,37 @@ jobs:
           ignore_config_file: .github/spdx-ignore.yaml
 
   build:
+    name: Build app and tests
     needs: check-spdx
-
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
-    container:
-      image: zephyrprojectrtos/ci:v0.28.9
-
     strategy:
+      fail-fast: false
       matrix:
+#        os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
+        os: [ubuntu-24.04]
         board: [nucleo_f767zi, hifive_premier_p550_mcu, qemu_cortex_m3]
-
-    env:
-      CMAKE_PREFIX_PATH: /opt/toolchains
-      ZEPHYR_TOOLCHAIN_VARIANT: zephyr
-      BOARD: ${{ matrix.board }}
-
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           path: wallabmc
+          persist-credentials: false
 
-      - name: Detect Zephyr SDK
-        run: |
-          SDK_PATH=$(find /opt/toolchains -maxdepth 1 -type d -name "zephyr-sdk-*" | head -n 1)
-          if [ -z "$SDK_PATH" ]; then
-            echo "Error: Could not find Zephyr SDK in /opt/toolchains"
-            exit 1
-          fi
-          echo "ZEPHYR_SDK_INSTALL_DIR=$SDK_PATH" >> $GITHUB_ENV
-
-      - name: Create Workspace Directory
-        run: mkdir workspace
-
-      - name: Cache West Modules
-        uses: actions/cache@v4
-        env:
-          cache-name: cache-zephyr-modules
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          path: workspace
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('wallabmc/west.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
+          python-version: 3.13
 
-      - name: Initialize West Workspace
-        run: |
-          cd workspace
-          # Remove old .west config if it exists from cache to avoid conflicts
-          rm -rf .west
-
-          # Initialize using the wallabmc repo as the manifest
-          west init -l ../wallabmc
-
-          # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
-          west update --narrow -o=--depth=10000 -o=--tags
+      - name: Setup Zephyr project
+        uses: zephyrproject-rtos/action-zephyr-setup@v1
+        with:
+          app-path: wallabmc
+          toolchains: arm-zephyr-eabi
+          ccache-cache-key: ${{ matrix.os }}
 
       - name: Build WallaBMC (sysbuild boards)
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
-        working-directory: workspace
+        working-directory: wallabmc
         run: |
           west build --sysbuild -p always -b $BOARD ../wallabmc
           mv build/mcuboot/zephyr/zephyr.hex build/mcuboot.hex
@@ -95,7 +66,7 @@ jobs:
 
       - name: Build WallaBMC (QEMU image)
         if: ${{ matrix.board == 'qemu_cortex_m3' }}
-        working-directory: workspace
+        working-directory: wallabmc
         run: |
           # QEMU build does not do sysbuild
           west build -p always -b $BOARD ../wallabmc
@@ -125,9 +96,6 @@ jobs:
             workspace/build/zephyr/zephyr.elf
 
   test:
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
-
     needs: build
     if: needs.build.result == 'success'
 
