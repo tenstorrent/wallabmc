@@ -39,10 +39,13 @@ jobs:
       BOARD: ${{ matrix.board }}
 
     steps:
+      - name: Create Workspace Directory
+        run: mkdir workspace
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          path: wallabmc
+          path: workspace/wallabmc
 
       - name: Detect Zephyr SDK
         run: |
@@ -53,16 +56,15 @@ jobs:
           fi
           echo "ZEPHYR_SDK_INSTALL_DIR=$SDK_PATH" >> $GITHUB_ENV
 
-      - name: Create Workspace Directory
-        run: mkdir workspace
-
       - name: Cache West Modules
         uses: actions/cache@v4
         env:
           cache-name: cache-zephyr-modules
         with:
-          path: workspace
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('wallabmc/west.yml') }}
+          path: |
+            workspace
+            !workspace/wallabmc
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('workspace/wallabmc/west.yml') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.cache-name }}-
             ${{ runner.os }}-build-
@@ -74,7 +76,7 @@ jobs:
           rm -rf .west
 
           # Initialize using the wallabmc repo as the manifest
-          west init -l ../wallabmc
+          west init -l ./wallabmc
 
           # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
           west update --narrow -o=--depth=10000 -o=--tags
@@ -83,7 +85,7 @@ jobs:
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
         working-directory: workspace
         run: |
-          west build --sysbuild -p always -b $BOARD ../wallabmc
+          west build --sysbuild -p always -b $BOARD ./wallabmc
           mv build/mcuboot/zephyr/zephyr.hex build/mcuboot.hex
           mv build/mcuboot/zephyr/zephyr.bin build/mcuboot.bin
           mv build/mcuboot/zephyr/zephyr.elf build/mcuboot.elf
@@ -98,7 +100,7 @@ jobs:
         working-directory: workspace
         run: |
           # QEMU build does not do sysbuild
-          west build -p always -b $BOARD ../wallabmc
+          west build -p always -b $BOARD ./wallabmc
 
       - name: Upload Board Firmware
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
