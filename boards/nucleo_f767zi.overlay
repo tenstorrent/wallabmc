@@ -24,6 +24,18 @@
         };
     };
 
+    // Zephyr configures ACTIVE_LOW by default, which reads 0 when the
+    // button is pressed and 1 when it is released. Flip to 1 on press.
+    gpio_keys {
+        compatible = "gpio-keys";
+
+        user_button: button_0 {
+            label = "User";
+            gpios = <&gpioc 13 GPIO_ACTIVE_HIGH>;
+            zephyr,code = <INPUT_KEY_0>;
+        };
+    };
+
     aliases {
         jtagtck = &jtagtck;
         jtagtms = &jtagtms;
