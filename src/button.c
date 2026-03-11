@@ -17,7 +17,6 @@ LOG_MODULE_REGISTER(wallabmc_button, LOG_LEVEL_INF);
 #include "button.h"
 #include "main.h"
 #include "config.h"
-#include "fs.h"
 
 #define USER_BUTTON_NODE	DT_ALIAS(reset_button)
 #if DT_NODE_HAS_STATUS_OKAY(USER_BUTTON_NODE)
