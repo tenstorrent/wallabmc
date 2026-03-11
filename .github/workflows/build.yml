@@ -30,6 +30,10 @@ jobs:
 #        os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
         os: [ubuntu-latest]
         board: [nucleo_f767zi, hifive_premier_p550_mcu, qemu_cortex_m3]
+
+    env:
+      BOARD: ${{ matrix.board }}
+
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -54,7 +58,7 @@ jobs:
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
         working-directory: wallabmc
         run: |
-          west build --sysbuild -p always -b $BOARD ../wallabmc
+          west build --sysbuild -p always -b $BOARD ./wallabmc
           mv build/mcuboot/zephyr/zephyr.hex build/mcuboot.hex
           mv build/mcuboot/zephyr/zephyr.bin build/mcuboot.bin
           mv build/mcuboot/zephyr/zephyr.elf build/mcuboot.elf
@@ -69,7 +73,7 @@ jobs:
         working-directory: wallabmc
         run: |
           # QEMU build does not do sysbuild
-          west build -p always -b $BOARD ../wallabmc
+          west build -p always -b $BOARD ./wallabmc
 
       - name: Upload Board Firmware
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
