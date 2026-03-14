@@ -71,32 +71,44 @@ static void calc_rx_buf(struct console_log *log, int *off, int *len)
 static void uart_rx_ready(const struct device *dev, struct uart_event *evt, struct console_log *log)
 {
 	k_spinlock_key_t key;
-	int off, len;
-	int ret;
 
+	printf("%s: received=%d@%d\n", __func__, evt->data.rx.len, evt->data.rx.offset);
 	key = k_spin_lock(&log->rx_lock);
 	log->received += evt->data.rx.len;
 	k_spin_unlock(&log->rx_lock, key);
+
+	k_sem_give(&log->rx_sem);
+}
+
+static void uart_rx_disabled(const struct device *dev, struct console_log *log)
+{
+	int off, len;
+	int ret;
+
+	printf("%s\n", __func__);
 
 	calc_rx_buf(log, &off, &len);
 	ret = uart_rx_enable(dev, log->log_buffer + off, len, UART_RX_DELAY_US);
 	if (ret < 0)
 		LOG_ERR("Failed to enable UART RX: %d", ret);
-
-	k_sem_give(&log->rx_sem);
 }
 
 static void uart_callback(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	struct console_log *log = user_data;
 
+	printf("%s %d\n", __func__, evt->type);
 	switch (evt->type) {
 	case UART_RX_RDY:
 		uart_rx_ready(dev, evt, log);
 		break;
 
-	case UART_RX_BUF_REQUEST:
 	case UART_RX_DISABLED:
+		uart_rx_disabled(dev, log);
+		break;
+
+	case UART_RX_BUF_REQUEST:
+		/* XXX: implement this */
 	case UART_RX_STOPPED:
 		break;
 
@@ -140,7 +152,19 @@ static ssize_t console_log_read(struct console_log *log, uint8_t *buf, size_t si
 		len = MIN(len, size - copied);
 		if (len == 0)
 			break;
+		printf("read buffer from %d to %d\n", off, off + len);
+#if 0
+		for (int i = 0; i < len; i++) {
+			if (log->log_buffer[off + i] == '\n') {
+				buf[i] = '\r';
+				i++;
+				len++;
+			}
+			buf[i] = log->log_buffer[off + i];
+		}
+#else
 		memcpy(buf, log->log_buffer + off, len);
+#endif
 		pos += len;
 		copied += len;
 	}
@@ -163,6 +187,11 @@ static ssize_t console_log_write(struct console_log *log, const uint8_t *buf, si
 
 		k_sem_take(&log->tx_sem, K_FOREVER);
 		memcpy(log->tx_buffer, buf + copied, len);
+
+		if (1) {
+			log->tx_buffer[len] = '\0';
+			printk("UART TX %s\n", log->tx_buffer);
+		}
 
 		ret = uart_tx(log->uart, log->tx_buffer, len, SYS_FOREVER_US);
 		if (ret < 0) {
@@ -196,9 +225,9 @@ ssize_t host_console_read(uint8_t *buf, size_t size, uint64_t *ppos, k_timeout_t
 		if (ret < len) {
 			if (copied > 0)
 				break;
+			/* XXX: use a k event to signal all waiters */
 			if (k_sem_take(&host_console_log->rx_sem, timeout) != 0)
 				break;
-			k_sem_give(&host_console_log->rx_sem);
 		}
 	}
 
@@ -244,12 +273,6 @@ int console_logger_init(void)
 	host_console_log->tx_buffer = tx_buffer;
 	k_sem_init(&host_console_log->rx_sem, 0, 1);
 	k_sem_init(&host_console_log->tx_sem, 1, 1);
-
-	if (1) {
-		const char str[] = "Hello, World!\r\n";
-		memcpy(host_console_log->log_buffer, str, sizeof(str));
-		host_console_log->received += sizeof(str);
-	}
 
 #if DT_NODE_EXISTS(UARTMUXSEL_NODE)
 	/* Initialize uartmuxsel GPIO */

@@ -132,7 +132,7 @@ static int setup_tls(void)
 
 #include <zephyr/net/websocket.h>
 #define CREDENTIALS_MAX_LEN 64
-static int ws_validate_auth(int ws_socket, struct http_request_ctx *request_ctx, void *user_data)
+int ws_validate_auth(int ws_socket, struct http_request_ctx *request_ctx, void *user_data)
 {
 	static const char auth_prefix[] = "Auth:";
 	uint8_t rx_buf[sizeof(auth_prefix) + CREDENTIALS_MAX_LEN];

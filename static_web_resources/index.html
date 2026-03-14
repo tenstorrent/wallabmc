@@ -324,7 +324,7 @@
 					<h1 style="font-size: 1.5rem; margin: 0; color: var(--dark);">WallaBMC Admin Dashboard</h1>
 				</div>
 				<div class="nav-actions">
-					<button class="dark" onclick="openTerminal()">BMC Console</button>
+					<button class="dark" onclick="openTerminal()">Host Serial Console</button>
 					<button class="secondary" onclick="logout()">Logout</button>
 				</div>
 			</div>
@@ -846,7 +846,13 @@
 			document.getElementById('term-modal').classList.remove('hidden');
 
 			if (!term) {
-				term = new Terminal({ cursorBlink: true, theme: { background: '#000000' } });
+				term = new Terminal({
+					role: "server",
+					shell: "linux",
+					convertEol: true,
+					cursorBlink: true,
+					theme: { background: '#000000' },
+				});
 				const fitAddon = new FitAddon.FitAddon();
 				term.loadAddon(fitAddon);
 
@@ -854,7 +860,7 @@
 				term.open(container);
 				fitAddon.fit();
 
-				term.write("Connecting to BMC Console...\r\n");
+				term.write("Connecting to Host Serial Console...\n");
 
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 				// const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
@@ -863,24 +869,22 @@
 				ws = new WebSocket(wsUrl);
 				ws.addEventListener('open', () => {
 					ws.send(wsAuthMsg);
+					term.write('\x1b[1;32mConnected to Host Serial Console.\x1b[0m\n');
 					const attachAddon = new AttachAddon.AttachAddon(ws);
 					term.loadAddon(attachAddon);
 					// XXX: fitAddon.fit();
 					ws_open = true;
-
-					term.write('\x1b[1;32mConnected. Welcome to WallaBMC 🦘\x1b[0m\r\n');
-					term.write('\x1b[1;32mbmc:~$\x1b[0m ');
 				});
 				ws.addEventListener('close', (event) => {
 					if (!ws_open) {
-						term.write(`\x1b[1;31mFailed! (code ${event.code})\x1b[0m\r\n`);
+						term.write(`\x1b[1;31mFailed! (code ${event.code})\x1b[0m\n`);
 						if (socketProtocol === 'wss:' && (event.code === 1006 || event.code === 1015))
-							term.write('\x1b[33mPossible websocket TLS/SSL error.\x1b[0m\r\n');
+							term.write('\x1b[33mPossible websocket TLS/SSL error.\x1b[0m\n');
 					} else {
-						term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\r\n`);
+						term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\n`);
 					}
 					if (event.code === 1005)
-						term.write('\x1b[33mPossible authentication error.\x1b[0m\r\n');
+						term.write('\x1b[33mPossible authentication error.\x1b[0m\n');
 					ws_open = false;
 				});
 			}

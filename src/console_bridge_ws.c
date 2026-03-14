@@ -20,6 +20,7 @@ LOG_MODULE_REGISTER(host_console_ws, LOG_LEVEL_INF);
 #include <string.h>
 
 #include "console_logger.h"
+#include "http.h"
 
 /* WebSocket buffer size */
 #define WS_RX_BUF_SIZE 256
@@ -67,8 +68,8 @@ static ssize_t ws_send(struct host_websocket *ws, const void *buf, size_t size, 
 	}
 
 	while (copied < size) {
-		ret = zsock_send(ws->fds[0].fd, (uint8_t *)buf + copied, size - copied,
-				 block ? 0 : ZSOCK_MSG_DONTWAIT);
+		ret = websocket_send_msg(ws->fds[0].fd, (uint8_t *)buf + copied, size - copied,
+					 WEBSOCKET_OPCODE_DATA_TEXT, false, true, block ? SYS_FOREVER_MS : 0);
 		if (ret < 0) {
 			if (errno == EAGAIN && !block)
 				return copied;
@@ -84,15 +85,24 @@ static ssize_t ws_send(struct host_websocket *ws, const void *buf, size_t size, 
 		copied += ret;
 	}
 
-	return 0;
+	return copied;
 }
 
 static ssize_t ws_recv(struct host_websocket *ws, void *buf, size_t size, bool block)
 {
 	ssize_t ret;
+	uint32_t message_type;
+	uint64_t remaining;
 
-	ret = zsock_recv(ws->fds[0].fd, buf, size,
-				 block ? 0 : ZSOCK_MSG_DONTWAIT);
+	ret = websocket_recv_msg(ws->fds[0].fd, buf, size,
+				&message_type, &remaining, block ? SYS_FOREVER_MS : 0);
+	if (message_type & WEBSOCKET_FLAG_TEXT) {
+		printf("ws recv data text ret=%zd 0x%02x\n", ret, ((char *)buf)[0]);
+	} else if (message_type & WEBSOCKET_FLAG_BINARY) {
+		printf("ws recv data bin  ret=%zd 0x%02x\n", ret, ((char *)buf)[0]);
+	} else {
+		printf("ws recv data %d    ret=%zd 0x%02x\n", message_type, ret, ((char *)buf)[0]);
+	}
 	if (ret < 0) {
 		LOG_DBG("Websocket client error %d", ret);
 		if (errno == EAGAIN && !block)
@@ -132,7 +142,7 @@ static void socket_send_thread(void *a, void *b, void *c)
 		}
 
 		/* Don't wait forever so we poll for a new client */
-		ret = host_console_read(buf, sizeof(buf), &pos, K_MSEC(1000));
+		ret = host_console_read(buf, sizeof(buf), &pos, K_MSEC(500));
 		if (ret <= 0)
 			continue;
 
@@ -142,6 +152,7 @@ again:
 		if (ws->fds[0].fd == -1)
 			continue;
 
+		printf("ws_send %zd\n", nr - copied);
 		ret = ws_send(ws, buf + copied, nr - copied, true);
 		if (ret < 0) {
 			LOG_WRN("Socket send error: %d ret: %zd", errno, ret);
@@ -165,6 +176,8 @@ static void ws_server_cb(struct net_socket_service_event *evt)
 	net_socklen_t optlen = sizeof(int);
 	struct host_websocket *ws;
 	int sock_error;
+
+	printf("%s\n", __func__);
 
 	ws = (struct host_websocket *)evt->user_data;
 
@@ -192,6 +205,7 @@ static void ws_server_cb(struct net_socket_service_event *evt)
 		if (ret <= 0)
 			return;
 
+		printf("host console write len=%zd\n", ret);
 		ret = host_console_write(ws_recv_buf, ret);
 	}
 }
@@ -205,6 +219,10 @@ static int console_ws_http_cb(int ws_socket, struct http_request_ctx *request_ct
 		LOG_ERR("Invalid socket %d", ws_socket);
 		return -EBADF;
 	}
+
+	ret = ws_validate_auth(ws_socket, request_ctx, user_data);
+	if (ret < 0)
+		return ret;
 
 	if (ctx->fds[0].fd >= 0) {
 		/* There is already a websocket connection to this shell,
