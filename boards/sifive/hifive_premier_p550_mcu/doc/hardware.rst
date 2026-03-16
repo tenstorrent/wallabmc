@@ -1095,11 +1095,12 @@ Response status is at offset 0x130 in the response context:
 - ``0xFF`` = no response / timeout
 - Other values = error codes
 
-sominfo command (cmd 0x21)
----------------------------
+READ_BOARD_INFO command (cmd_type=3)
+--------------------------------------
 
-Sends cmd 0x21 to SoC, receives 33 bytes of board info in the same format
-as the EEPROM carrier board record (but from the SoM's own storage):
+Sends cmd_type=3 (READ_BOARD_INFO) with data_len=33 to SoC, receives 33
+bytes of board info in the same format as the EEPROM carrier board record
+(but from the SoM's own storage):
 
 ::
 
@@ -1119,10 +1120,10 @@ through manufacturingTestStatus), without the MAC addresses or CRC.
 **Requires**: SoC must be powered on and running the UART protocol daemon.
 If SoC is off, ``web_cmd_handle`` returns error code 1 immediately.
 
-Temperature/PVT command (cmd 0x0C)
-------------------------------------
+PVT_INFO command (cmd_type=5)
+-------------------------------
 
-Sends cmd 0x0C to SoC, receives 12 bytes:
+Sends cmd_type=5 (PVT_INFO) with data_len=12 to SoC, receives 12 bytes:
 
 .. list-table::
    :header-rows: 1
@@ -1154,10 +1155,10 @@ SoC keepalive mechanism
 ------------------------
 
 The original firmware runs a keepalive timer (``SomRestartTimer``, 6 second
-interval). It sends cmd 0x00 to the SoC. If no response is received within
-5 seconds (``SOM_STATUS_CHECK_STATE`` timer), the SoC is considered
-unresponsive. The keepalive state is exposed via ``somwork`` CLI command
-(``Som Work Status: ...``).
+interval). It sends a request with cmd_type=0 to the SoC. If no response is
+received within 5 seconds (``SOM_STATUS_CHECK_STATE`` timer), the SoC is
+considered unresponsive. The keepalive state is exposed via ``somwork`` CLI
+command (``Som Work Status: ...``).
 
 WallaBMC implementation notes
 ------------------------------
