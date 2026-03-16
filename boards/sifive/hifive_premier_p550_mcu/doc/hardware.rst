@@ -956,24 +956,24 @@ Packet format (267 bytes, 0x10B)
      - ``55 AA 5A A5``
    * - 4-7
      - 4
-     - reserved
-     - Zero
+     - xTaskToNotify
+     - Task ID (used by FreeRTOS on MCU side to match replies)
    * - 8
      - 1
-     - type
-     - Packet type: ``0x01`` = request
+     - msg_type
+     - Message type (see message types below)
    * - 9
      - 1
-     - source
-     - Source ID: ``0x03`` = CLI, ``0x05`` = web API
+     - cmd_type
+     - Command type enum (see command table below)
    * - 10
      - 1
-     - reserved
-     - Zero
+     - cmd_result
+     - Result code: ``0x00`` = success, ``0x01`` = error, ``0x02`` = invalid, ``0x03`` = not supported
    * - 11
      - 1
-     - cmd
-     - Command ID (see command table below)
+     - data_len
+     - Payload data length in bytes (0-250)
    * - 12-261
      - 250
      - payload
@@ -989,6 +989,25 @@ Packet format (267 bytes, 0x10B)
 
 Both request and response use the same 267-byte frame format. The SoC runs a
 matching daemon that receives on its UART0 and responds in the same format.
+
+Message types
+--------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - Value
+     - Name
+     - Description
+   * - 0x01
+     - REQUEST
+     - Request from MCU to SoC
+   * - 0x02
+     - REPLY
+     - Reply from SoC to MCU
+   * - 0x03
+     - NOTIFY
+     - Asynchronous notification
 
 Checksum calculation
 ---------------------
