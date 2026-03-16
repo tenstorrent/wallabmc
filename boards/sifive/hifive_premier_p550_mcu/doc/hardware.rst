@@ -1015,12 +1015,13 @@ Checksum calculation
 .. code-block:: c
 
    uint8_t checksum = packet[8] ^ packet[9] ^ packet[11];
-   for (int i = 0; i < payload_len; i++)
+   for (int i = 0; i < data_len; i++)
        checksum ^= packet[12 + i];
    packet[262] = checksum;
 
-Where ``payload_len`` is taken from ``packet[11]`` (the command byte also encodes
-the response data size in the original firmware).
+Where ``data_len`` is the value of ``packet[11]``. Since the payload is zero-padded
+to 250 bytes, iterating over all 250 bytes (as OpenSBI does) produces the same
+result as XORing zero bytes is a no-op.
 
 Command table
 --------------
