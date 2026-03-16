@@ -935,6 +935,11 @@ The MCU and SoC communicate over UART4 (PC10 TX, PC11 RX, 115200 8N1) using
 a fixed-length binary protocol. This is used to query SoC status, get SoM
 board info, read temperatures, and exchange keepalive messages.
 
+The protocol is defined in the `public OpenSBI patch for EIC7700
+<https://lore.kernel.org/opensbi/20251218104243.562667-8-ganboing@gmail.com/>`_,
+which is the authoritative reference for field names and command types used
+below.
+
 Packet format (267 bytes, 0x10B)
 ---------------------------------
 
