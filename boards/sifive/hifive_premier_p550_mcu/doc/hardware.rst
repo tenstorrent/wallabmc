@@ -1028,7 +1028,7 @@ Command table
 .. list-table::
    :header-rows: 1
 
-   * - Cmd ID
+   * - cmd_type
      - Name
      - Direction
      - Payload size
@@ -1038,16 +1038,46 @@ Command table
      - MCU->SoC->MCU
      - 0
      - SoC daemon liveness check. Sent periodically (every 6 seconds via ``SomRestartTimer``). If no response after 5 seconds, SoC is considered down.
-   * - 0x0C
-     - PVT/Temperature
-     - MCU->SoC->MCU
-     - 12
-     - Get CPU temp, NPU temp, and fan speed from SoC
-   * - 0x21
-     - SoM Board Info
-     - MCU->SoC->MCU
+   * - 0x01
+     - POWER_OFF
+     - SoC->MCU
+     - 0
+     - Power off the board
+   * - 0x02
+     - REBOOT
+     - ?
+     - ?
+     - Warm reboot
+   * - 0x03
+     - READ_BOARD_INFO
+     - ?
      - 33
      - Get SoM board identity (same struct as EEPROM)
+   * - 0x04
+     - CONTROL_LED
+     - ?
+     - ?
+     - LED control
+   * - 0x05
+     - PVT_INFO
+     - ?
+     - 12
+     - Get CPU temp, NPU temp, and fan speed from SoC
+   * - 0x06
+     - BOARD_STATUS
+     - ?
+     - ?
+     - Board power status
+   * - 0x07
+     - POWER_INFO
+     - ?
+     - ?
+     - Detailed power info
+   * - 0x08
+     - RESTART
+     - ?
+     - 0
+     - Cold reboot (power cycle)
 
 Response handling
 ------------------
