@@ -62,6 +62,8 @@ struct config_data {
 	uint32_t bmc_default_ip4_gw;
 };
 
+BUILD_ASSERT(strlen(CONFIG_DEFAULT_ADMIN_PASSWORD) <= MAX_PW_LEN);
+
 static struct config_data config_data;
 
 /*
@@ -564,6 +566,11 @@ int config_bmc_password_set(const char *password)
 {
 	int rc;
 
+	if (strlen(password) > MAX_PW_LEN) {
+		LOG_ERR("Password too long, max length is %d characters", MAX_PW_LEN);
+		return -EINVAL;
+	}
+
 	strlcpy(config_data.bmc_admin_password, password, sizeof(config_data.bmc_admin_password));
 	rc = config_write_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	if (rc < 0) {
@@ -580,6 +587,8 @@ int config_bmc_password_set(const char *password)
 
 static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **argv)
 {
+	int rc;
+
 	ARG_UNUSED(argc);
 
 	if (!is_boot_finished()) {
@@ -587,7 +596,12 @@ static int cmd_config_bmc_password(const struct shell *sh, size_t argc, char **a
 		return -EAGAIN;
 	}
 
-	config_bmc_password_set(argv[1]);
+	rc = config_bmc_password_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC admin password (err=%d)", rc);
+		return rc;
+	}
+
 	shell_info(sh, "BMC admin password updated");
 
 	return 0;
@@ -758,7 +772,7 @@ int config_init(void)
 	 */
 	rc = config_read_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	if (rc < 0) {
-		strlcpy(config_data.bmc_admin_password, "admin", sizeof(config_data.bmc_admin_password));
+		strlcpy(config_data.bmc_admin_password, CONFIG_DEFAULT_ADMIN_PASSWORD, sizeof(config_data.bmc_admin_password));
 		config_write_str(CFG_BMC_ADMIN_PASSWORD, config_data.bmc_admin_password);
 	}
 

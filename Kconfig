@@ -191,6 +191,10 @@ config REDFISH_SYSTEM_MEMORY_GIB
 	help
 	  Total system memory in GiB for Redfish MemorySummary. 0 shows as N/A.
 
+config HTTP_SERVER_MAX_HEADER_LEN
+	int
+	default 48 # Basic auth header + 15 character password is 34 characters
+
 endif # REDFISH
 
 config HTTP_SERVER_NUM_SERVICES
@@ -246,6 +250,10 @@ config SHELL_WEBSOCKET_ENDPOINT_URL
 	string
 	depends on SHELL_BACKEND_WEBSOCKET
 	default "console/bmc"
+
+config DEFAULT_ADMIN_PASSWORD
+	string "Default admin password"
+	default "$(shell,openssl rand -base64 12 | head -c 15)"
 
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int

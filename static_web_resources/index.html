@@ -309,7 +309,7 @@
 				<img src="logo.jpeg" alt="WallaBMC" style="max-width: 200px; height: auto;">
 			</div>
 			<form class="login-form" onsubmit="event.preventDefault(); connectToBmc();">
-				<input type="password" id="password" placeholder="Password (default: 'admin')" autofocus>
+				<input type="password" id="password" placeholder="Password" autofocus>
 				<button type="submit">Login</button>
 			</form>
 			<p id="login-error" style="text-align: center; color: var(--danger); margin-top: 15px;" class="hidden"></p>
@@ -382,7 +382,8 @@
 				<div class="grid-4-col">
 					<div class="info-item">
 						<label for="cfg-password">New Password</label>
-						<input type="password" id="cfg-password" placeholder="Unchanged">
+						<input type="password" id="cfg-password" placeholder="Unchanged" title="Maximum 15 characters">
+						<small id="pwd-error" style="color: red; display: none;">Password must be 15 characters or fewer.</small>
 					</div>
 				</div>
 
@@ -850,6 +851,16 @@
 				alert(`Failed: ${err.message}`);
 			}
 		}
+
+		// Show password error if password is too long
+		document.getElementById('cfg-password').addEventListener('input', function (e) {
+			const errEl = document.getElementById('pwd-error');
+			if (e.target.value.length > 15) {
+				errEl.style.display = 'inline';
+			} else {
+				errEl.style.display = 'none';
+			}
+		});
 
 		// --- Terminal Handling ---
 		class WSConsole {
