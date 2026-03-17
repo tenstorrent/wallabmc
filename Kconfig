@@ -328,12 +328,25 @@ config APP_STACK_DEBUG
 	select THREAD_NAME
 	select THREAD_ANALYZER
 	select THREAD_ANALYZER_RUN_UNLOCKED
-config CONSOLE_BRIDGE
-	bool "Console bridge (USART6 to TCP port 22)"
+
+config APP_CONSOLE_LOGGER
+	bool "Console logger (capture host console uart)"
 	default y
 	select SERIAL
 	select SERIAL_SUPPORT_ASYNC
 	select UART_ASYNC_API
+
+if APP_CONSOLE_LOGGER
+config APP_CONSOLE_LOG_SIZE
+	int "Console log size"
+	range 64 65536
+	default 2048
+endif
+
+config CONSOLE_BRIDGE
+	bool "Console bridge (host console to TCP port 22)"
+	default y
+	depends on APP_CONSOLE_LOGGER
 
 if CONSOLE_BRIDGE
 
