@@ -23,6 +23,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "jtag.h"
 #include "console_logger.h"
 #include "console_bridge.h"
+#include "console_bridge_ws.h"
 
 static bool boot_finished = false;
 
@@ -267,6 +268,12 @@ int main(void)
 	LOG_DBG("Console bridge init");
 	if (console_bridge_init() < 0) {
 		LOG_ERR("Console bridge init failed");
+		return -1;
+	}
+
+	LOG_DBG("Console bridge WS init");
+	if (console_bridge_ws_init() < 0) {
+		LOG_ERR("Console bridge WS init failed");
 		return -1;
 	}
 

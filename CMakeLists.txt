@@ -88,6 +88,10 @@ target_sources_ifdef(CONFIG_CONSOLE_BRIDGE app PRIVATE
 	src/console_bridge.c
 )
 
+target_sources_ifdef(CONFIG_APP_WEB_TERMINAL_HOST_SERIAL app PRIVATE
+	src/console_bridge_ws.c
+)
+
 target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE
 	src/button.c
 	src/fs.c
