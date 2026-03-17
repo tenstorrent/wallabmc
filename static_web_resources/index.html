@@ -324,7 +324,8 @@
 					<h1 style="font-size: 1.5rem; margin: 0; color: var(--dark);">WallaBMC Admin Dashboard</h1>
 				</div>
 				<div class="nav-actions">
-					<button class="dark" onclick="openTerminal()">BMC Console</button>
+					<button class="dark" onclick="openTerminal(true)">Host Console</button>
+					<button class="dark" onclick="openTerminal(false)">BMC Shell</button>
 					<button class="secondary" onclick="logout()">Logout</button>
 				</div>
 			</div>
@@ -461,19 +462,31 @@
 			</div>
 		</div>
 
-		<div id="term-modal" class="modal-overlay hidden">
+		<div id="host-term-modal" class="modal-overlay hidden">
 			<div class="term-window">
 				<div class="term-header">
-					<span>Serial Console</span>
+					<span>Host Serial Console</span>
 					<div class="term-controls">
-						<button onclick="hideTerminal()" title="Minimize">&minus;</button>
-						<button onclick="closeTerminal()" title="Close">&times;</button>
+						<button onclick="hideTerminal(true)" title="Minimize">&minus;</button>
+						<button onclick="closeTerminal(true)" title="Close">&times;</button>
 					</div>
 				</div>
-				<div id="terminal-container"></div>
+				<div id="host-terminal-container"></div>
 			</div>
 		</div>
 
+		<div id="bmc-term-modal" class="modal-overlay hidden">
+			<div class="term-window">
+				<div class="term-header">
+					<span>BMC Shell</span>
+					<div class="term-controls">
+						<button onclick="hideTerminal(false)" title="Minimize">&minus;</button>
+						<button onclick="closeTerminal(false)" title="Close">&times;</button>
+					</div>
+				</div>
+				<div id="bmc-terminal-container"></div>
+			</div>
+		</div>
 	</div>
 
 	<script>
@@ -620,7 +633,8 @@
 			if (refreshTimer)
 				clearTimeout(refreshTimer);
 			refreshTimer = null;
-			closeTerminal();
+			closeTerminal(true);
+			closeTerminal(false);
 
 			basicAuthHeader = null;
 			wsAuthMsg = null;
@@ -838,70 +852,108 @@
 		}
 
 		// --- Terminal Handling ---
-		let term = null;
-		let ws = null;
-		let ws_open = false;
-
-		function openTerminal() {
-			document.getElementById('term-modal').classList.remove('hidden');
-
-			if (!term) {
-				term = new Terminal({ cursorBlink: true, theme: { background: '#000000' } });
+		class WSConsole {
+			constructor(wsUrl, htmlContainer, nameString, promptString) {
+				this.term = new Terminal({
+						role: "server",
+						shell: "linux",
+						convertEol: true,
+						cursorBlink: true,
+						theme: { background: '#000000' },
+				});
 				const fitAddon = new FitAddon.FitAddon();
-				term.loadAddon(fitAddon);
+				this.term.loadAddon(fitAddon);
 
-				const container = document.getElementById('terminal-container');
-				term.open(container);
+				this.term.open(htmlContainer);
 				fitAddon.fit();
 
-				term.write("Connecting to BMC Console...\r\n");
+				this.term.write(`Connecting to ${nameString}...`);
 
-				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-				const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
-
-				ws = new WebSocket(wsUrl);
-				ws.addEventListener('open', () => {
-					ws.send(wsAuthMsg);
-					const attachAddon = new AttachAddon.AttachAddon(ws);
-					term.loadAddon(attachAddon);
+				this.ws = new WebSocket(wsUrl);
+				this.ws.addEventListener('open', () => {
+					this.ws.send(wsAuthMsg);
+					this.term.write('\x1b[1;32mConnected!\x1b[0m\n');
+					if (promptString)
+						this.term.write(promptString);
+					const attachAddon = new AttachAddon.AttachAddon(this.ws);
+					this.term.loadAddon(attachAddon);
 					// XXX: fitAddon.fit();
-					ws_open = true;
-
-					term.write('\x1b[1;32mConnected. Welcome to WallaBMC 🦘\x1b[0m\r\n');
-					term.write('\x1b[1;32mbmc:~$\x1b[0m ');
+					this.ws_open = true;
 				});
-				ws.addEventListener('close', (event) => {
-					if (!ws_open) {
-						term.write(`\x1b[1;31mFailed! (code ${event.code})\x1b[0m\r\n`);
-						if (socketProtocol === 'wss:' && (event.code === 1006 || event.code === 1015))
-							term.write('\x1b[33mPossible websocket TLS/SSL error.\x1b[0m\r\n');
+				this.ws.addEventListener('close', (event) => {
+					if (!this.ws_open) {
+						this.term.write(`\x1b[1;31mFailed! (code ${event.code})\x1b[0m\n`);
+						if (window.location.protocol === 'https:' && (event.code === 1006 || event.code === 1015))
+							this.term.write('\x1b[33mPossible websocket TLS/SSL error.\x1b[0m\n');
 					} else {
-						term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\r\n`);
+						this.term.write(`\r\n\x1b[1;31mConnection closed! (code ${event.code})\x1b[0m\n`);
 					}
 					if (event.code === 1005)
-						term.write('\x1b[33mPossible authentication error.\x1b[0m\r\n');
-					ws_open = false;
+						this.term.write('\x1b[33mPossible authentication error.\x1b[0m\n');
+					this.ws_open = false;
 				});
 			}
-			term.focus();
 		}
 
-		function hideTerminal() {
-			document.getElementById('term-modal').classList.add('hidden');
+		let hostWsConsole = null;
+		let bmcWsConsole = null;
+
+		function openTerminal(host) {
+			if (host)
+				document.getElementById('host-term-modal').classList.remove('hidden');
+			else
+				document.getElementById('bmc-term-modal').classList.remove('hidden');
+
+			if ((host && !hostWsConsole) || (!host && !bmcWsConsole)) {
+				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+				if (host) {
+					const wsUrl = `${socketProtocol}//${window.location.host}/console/host`;
+					const nameString = 'Host Serial Console';
+					const container = document.getElementById('host-terminal-container');
+					hostWsConsole = new WSConsole(wsUrl, container, nameString, null);
+				} else {
+					const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
+					const nameString = 'WallaBMC Shell';
+					const container = document.getElementById('bmc-terminal-container');
+					const promptString = '\x1b[1;32mWelcome to WallaBMC 🦘\x1b[0m\n\x1b[1;32mbmc:~$\x1b[0m ';
+					bmcWsConsole = new WSConsole(wsUrl, container, nameString, promptString);
+				}
+			}
+			if (host)
+				hostWsConsole.term.focus();
+			else
+				bmcWsConsole.term.focus();
 		}
 
-		function closeTerminal() {
-			hideTerminal();
-			if (ws) {
-				ws.close();
-				ws = null;
+		function hideTerminal(host) {
+			if (host)
+				document.getElementById('host-term-modal').classList.add('hidden');
+			else
+				document.getElementById('bmc-term-modal').classList.add('hidden');
+		}
+
+		function closeTerminal(host) {
+			hideTerminal(host);
+
+			if (host) {
+				if (hostWsConsole) {
+					if (hostWsConsole.ws)
+						hostWsConsole.ws.close()
+					if (hostWsConsole.term)
+						hostWsConsole.term.dispose()
+					hostWsConsole = null;
+				}
+				document.getElementById('host-terminal-container').innerHTML = '';
+			} else {
+				if (bmcWsConsole) {
+					if (bmcWsConsole.ws)
+						bmcWsConsole.ws.close()
+					if (bmcWsConsole.term)
+						bmcWsConsole.term.dispose()
+					bmcWsConsole = null;
+				}
+				document.getElementById('bmc-terminal-container').innerHTML = '';
 			}
-			ws_open = false;
-			if (term) {
-				term.dispose();
-				term = null;
-			}
-			document.getElementById('terminal-container').innerHTML = '';
 		}
 	</script>
 </body>
