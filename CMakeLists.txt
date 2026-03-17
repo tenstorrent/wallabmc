@@ -54,6 +54,7 @@ set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
 target_sources(app PRIVATE
 	src/config.c
 	src/dhcp.c
+	src/host.c
 	src/main.c
 	src/net.c
 	src/power.c

@@ -36,8 +36,10 @@
         power-gpio-1 = &dcen;
         power-gpio-2 = &atxpson;
         status-led = &blue_led;
-    };
 
+        host-console = &uart6;
+        host-message = &uart4;
+    };
 };
 
 &spi4 {

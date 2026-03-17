@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "rtc.h"
 #include "jtag.h"
 #include "console_bridge.h"
+#include "host.h"
 
 static bool boot_finished = false;
 
@@ -260,6 +261,11 @@ int main(void)
 	LOG_DBG("Console bridge init");
 	if (console_bridge_init() < 0) {
 		LOG_ERR("Console bridge init failed");
+		return -1;
+	}
+
+	if (host_init() < 0) {
+		LOG_ERR("Host communication init failed");
 		return -1;
 	}
 
