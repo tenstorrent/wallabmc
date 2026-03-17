@@ -47,11 +47,25 @@
         status-led = &blue_led;
 
         reset-button = &user_button;
+	host-console-uart = &usart6;
     };
 };
 
 &spi4 {
      status = "disabled";
+};
+
+&dma2 {
+    status = "okay";
+};
+
+&usart6 {
+	current-speed = <115200>;
+	status = "okay";
+	dmas = <&dma2 6 5 STM32_DMA_PERIPH_TX STM32_DMA_FIFO_FULL>,
+	       <&dma2 1 5 STM32_DMA_PERIPH_RX STM32_DMA_FIFO_FULL>;
+	dma-names = "tx", "rx";
+	fifo-enable;
 };
 
 /delete-node/ &boot_partition;
