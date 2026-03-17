@@ -935,6 +935,11 @@ The MCU and SoC communicate over UART4 (PC10 TX, PC11 RX, 115200 8N1) using
 a fixed-length binary protocol. This is used to query SoC status, get SoM
 board info, read temperatures, and exchange keepalive messages.
 
+The protocol is defined in the `public OpenSBI patch for EIC7700
+<https://lore.kernel.org/opensbi/20251218104243.562667-8-ganboing@gmail.com/>`_,
+which is the authoritative reference for field names and command types used
+below.
+
 Packet format (267 bytes, 0x10B)
 ---------------------------------
 
@@ -951,24 +956,24 @@ Packet format (267 bytes, 0x10B)
      - ``55 AA 5A A5``
    * - 4-7
      - 4
-     - reserved
-     - Zero
+     - xTaskToNotify
+     - Task ID (used by FreeRTOS on MCU side to match replies)
    * - 8
      - 1
-     - type
-     - Packet type: ``0x01`` = request
+     - msg_type
+     - Message type (see message types below)
    * - 9
      - 1
-     - source
-     - Source ID: ``0x03`` = CLI, ``0x05`` = web API
+     - cmd_type
+     - Command type enum (see command table below)
    * - 10
      - 1
-     - reserved
-     - Zero
+     - cmd_result
+     - Result code: ``0x00`` = success, ``0x01`` = error, ``0x02`` = invalid, ``0x03`` = not supported
    * - 11
      - 1
-     - cmd
-     - Command ID (see command table below)
+     - data_len
+     - Payload data length in bytes (0-250)
    * - 12-261
      - 250
      - payload
@@ -985,18 +990,38 @@ Packet format (267 bytes, 0x10B)
 Both request and response use the same 267-byte frame format. The SoC runs a
 matching daemon that receives on its UART0 and responds in the same format.
 
+Message types
+--------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - Value
+     - Name
+     - Description
+   * - 0x01
+     - REQUEST
+     - Request from MCU to SoC
+   * - 0x02
+     - REPLY
+     - Reply from SoC to MCU
+   * - 0x03
+     - NOTIFY
+     - Asynchronous notification
+
 Checksum calculation
 ---------------------
 
 .. code-block:: c
 
    uint8_t checksum = packet[8] ^ packet[9] ^ packet[11];
-   for (int i = 0; i < payload_len; i++)
+   for (int i = 0; i < data_len; i++)
        checksum ^= packet[12 + i];
    packet[262] = checksum;
 
-Where ``payload_len`` is taken from ``packet[11]`` (the command byte also encodes
-the response data size in the original firmware).
+Where ``data_len`` is the value of ``packet[11]``. Since the payload is zero-padded
+to 250 bytes, iterating over all 250 bytes (as OpenSBI does) produces the same
+result as XORing zero bytes is a no-op.
 
 Command table
 --------------
@@ -1004,7 +1029,7 @@ Command table
 .. list-table::
    :header-rows: 1
 
-   * - Cmd ID
+   * - cmd_type
      - Name
      - Direction
      - Payload size
@@ -1014,16 +1039,46 @@ Command table
      - MCU->SoC->MCU
      - 0
      - SoC daemon liveness check. Sent periodically (every 6 seconds via ``SomRestartTimer``). If no response after 5 seconds, SoC is considered down.
-   * - 0x0C
-     - PVT/Temperature
-     - MCU->SoC->MCU
-     - 12
-     - Get CPU temp, NPU temp, and fan speed from SoC
-   * - 0x21
-     - SoM Board Info
-     - MCU->SoC->MCU
+   * - 0x01
+     - POWER_OFF
+     - SoC->MCU
+     - 0
+     - Power off the board
+   * - 0x02
+     - REBOOT
+     - ?
+     - ?
+     - Warm reboot
+   * - 0x03
+     - READ_BOARD_INFO
+     - ?
      - 33
      - Get SoM board identity (same struct as EEPROM)
+   * - 0x04
+     - CONTROL_LED
+     - ?
+     - ?
+     - LED control
+   * - 0x05
+     - PVT_INFO
+     - ?
+     - 12
+     - Get CPU temp, NPU temp, and fan speed from SoC
+   * - 0x06
+     - BOARD_STATUS
+     - ?
+     - ?
+     - Board power status
+   * - 0x07
+     - POWER_INFO
+     - ?
+     - ?
+     - Detailed power info
+   * - 0x08
+     - RESTART
+     - ?
+     - 0
+     - Cold reboot (power cycle)
 
 Response handling
 ------------------
@@ -1040,11 +1095,12 @@ Response status is at offset 0x130 in the response context:
 - ``0xFF`` = no response / timeout
 - Other values = error codes
 
-sominfo command (cmd 0x21)
----------------------------
+READ_BOARD_INFO command (cmd_type=3)
+--------------------------------------
 
-Sends cmd 0x21 to SoC, receives 33 bytes of board info in the same format
-as the EEPROM carrier board record (but from the SoM's own storage):
+Sends cmd_type=3 (READ_BOARD_INFO) with data_len=33 to SoC, receives 33
+bytes of board info in the same format as the EEPROM carrier board record
+(but from the SoM's own storage):
 
 ::
 
@@ -1064,10 +1120,10 @@ through manufacturingTestStatus), without the MAC addresses or CRC.
 **Requires**: SoC must be powered on and running the UART protocol daemon.
 If SoC is off, ``web_cmd_handle`` returns error code 1 immediately.
 
-Temperature/PVT command (cmd 0x0C)
-------------------------------------
+PVT_INFO command (cmd_type=5)
+-------------------------------
 
-Sends cmd 0x0C to SoC, receives 12 bytes:
+Sends cmd_type=5 (PVT_INFO) with data_len=12 to SoC, receives 12 bytes:
 
 .. list-table::
    :header-rows: 1
@@ -1099,10 +1155,10 @@ SoC keepalive mechanism
 ------------------------
 
 The original firmware runs a keepalive timer (``SomRestartTimer``, 6 second
-interval). It sends cmd 0x00 to the SoC. If no response is received within
-5 seconds (``SOM_STATUS_CHECK_STATE`` timer), the SoC is considered
-unresponsive. The keepalive state is exposed via ``somwork`` CLI command
-(``Som Work Status: ...``).
+interval). It sends a request with cmd_type=0 to the SoC. If no response is
+received within 5 seconds (``SOM_STATUS_CHECK_STATE`` timer), the SoC is
+considered unresponsive. The keepalive state is exposed via ``somwork`` CLI
+command (``Som Work Status: ...``).
 
 WallaBMC implementation notes
 ------------------------------
