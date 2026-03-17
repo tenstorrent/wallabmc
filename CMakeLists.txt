@@ -57,6 +57,7 @@ target_sources(app PRIVATE
 	src/main.c
 	src/net.c
 	src/power.c
+	src/synch.c
 )
 
 target_sources_ifdef(CONFIG_RTC app PRIVATE
@@ -79,8 +80,16 @@ target_sources_ifdef(CONFIG_JTAG app PRIVATE
 	src/jtag.c
 )
 
+target_sources_ifdef(CONFIG_APP_CONSOLE_LOGGER app PRIVATE
+	src/console_logger.c
+)
+
 target_sources_ifdef(CONFIG_CONSOLE_BRIDGE app PRIVATE
 	src/console_bridge.c
+)
+
+target_sources_ifdef(CONFIG_APP_WEB_TERMINAL_HOST_SERIAL app PRIVATE
+	src/console_bridge_ws.c
 )
 
 target_sources_ifdef(CONFIG_PERSISTENT_STORAGE app PRIVATE

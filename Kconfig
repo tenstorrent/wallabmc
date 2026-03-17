@@ -208,17 +208,44 @@ config APP_WEB
 	select REDFISH
 
 config APP_WEB_TERMINAL
-	bool "Browser based terminal emulator"
+	bool "Websocket consoles and webui terminal emulator"
 	default y
 	select APP_WEB
 	select HTTP_SERVER_WEBSOCKET
+	# WS auth protocol requires these hashes
+	select BASE64
+	select MBEDTLS_SHA1
+
+config APP_WEB_TERMINAL_BMC_SHELL
+	bool "Zephyr shell websocket and webui terminal"
+	default y
+	depends on APP_WEB_TERMINAL
 	select SHELL
 	select SHELL_BACKEND_WEBSOCKET
 	select LOG_BACKEND_WS
 	select LOG_BACKEND_WS_AUTOSTART
-	# WS auth protocol requires these hashes
-	select BASE64
-	select MBEDTLS_SHA1
+
+config APP_WEB_TERMINAL_HOST_SERIAL
+	bool "Host serial websocket and webui terminal"
+	default y
+	select APP_CONSOLE_LOGGER
+	depends on APP_WEB_TERMINAL
+
+if APP_WEB_TERMINAL_HOST_SERIAL
+config CONSOLE_BRIDGE_WS_STACK_SIZE
+	int
+	default 4096 if APP_HTTPS
+	default 2048
+
+config CONSOLE_BRIDGE_WS_PRIORITY
+	int
+	default 5
+endif
+
+config SHELL_WEBSOCKET_ENDPOINT_URL
+	string
+	depends on SHELL_BACKEND_WEBSOCKET
+	default "console/bmc"
 
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int
@@ -323,12 +350,25 @@ config APP_STACK_DEBUG
 	select THREAD_NAME
 	select THREAD_ANALYZER
 	select THREAD_ANALYZER_RUN_UNLOCKED
-config CONSOLE_BRIDGE
-	bool "Console bridge (USART6 to TCP port 22)"
+
+config APP_CONSOLE_LOGGER
+	bool "Console logger (capture host console uart)"
 	default y
 	select SERIAL
 	select SERIAL_SUPPORT_ASYNC
 	select UART_ASYNC_API
+
+if APP_CONSOLE_LOGGER
+config APP_CONSOLE_LOG_SIZE
+	int "Console log size"
+	range 64 65536
+	default 2048
+endif
+
+config CONSOLE_BRIDGE
+	bool "Console bridge (host console to TCP port 22)"
+	default y
+	depends on APP_CONSOLE_LOGGER
 
 if CONSOLE_BRIDGE
 

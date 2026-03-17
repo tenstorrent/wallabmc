@@ -17,7 +17,7 @@ WallaBMC is designed for embedded systems requiring BMC capabilities without the
 * **BMC Console**: Management console accessible via serial or web interface
 * **Persistent Configuration**: Settings stored across reboots
 * **Host Power Control**: Power on/off management for host systems
-* **Host Console**: Serial console access (coming soon)
+* **Host Console**: Serial console access
 
 ### Hardware Support
 
@@ -122,6 +122,28 @@ hostname ``wallabmc`` to get an IP address.
 
 WallaBMC opens an HTTP (and possibly HTTPS) port, which provides Redfish and
 Web UI. The Web UI can also access the BMC console.
+
+## BMC shell
+
+The Zephyr shell has been extended with wallabmc commands, and can be accessed
+via the MCU serial console or the WebUI or websocket.
+
+The websocket BMC shell endpoint URL is /console/bmc and supports ws and
+wss if ``CONFIG_APP_HTTPS`` (e.g., ``wss://wallabmc.local.net/console/bmc``).
+
+## Host serial console
+
+The Nucleo has USART6 connected to pins D0/D1 RX/TX on the CN10 connector.
+WallaBMC uses this as the host serial console which can be accessed with
+the WebUI terminal or telnet port 22. The pins would have to be connected
+to something useful (e.g., each other have a loopback UART that echoes back
+what is transmitted to it).
+
+The P550 host serial console UART is connected to an actual serial console
+UART on the host CPU.
+
+The websocket host console endpoint URL is /console/host and supports ws and
+wss if ``CONFIG_APP_HTTPS`` (e.g., ``wss://wallabmc.local.net/console/host``).
 
 ### Settings and configuration
 
