@@ -34,10 +34,10 @@ static const struct device *uart_dev = DEVICE_DT_GET(UART_NODE);
 BUILD_ASSERT(DT_NODE_EXISTS(UART_NODE), "host-console-uart alias missing");
 
 /* UART mux select GPIO from device tree */
-#define UARTMUXSEL_NODE DT_ALIAS(uartmuxsel)
+#define UARTMUXSEL_NODE DT_ALIAS(host_console_uart_muxsel)
 #if DT_NODE_EXISTS(UARTMUXSEL_NODE)
-static const struct gpio_dt_spec uartmuxsel_gpio = GPIO_DT_SPEC_GET(UARTMUXSEL_NODE, gpios);
-static bool uartmuxsel_initialized = false;
+static const struct gpio_dt_spec host_console_uart_muxsel_gpio = GPIO_DT_SPEC_GET(UARTMUXSEL_NODE, gpios);
+static bool host_console_uart_muxsel_initialized = false;
 #endif
 
 static volatile int active_client_fd = -1;
@@ -61,12 +61,12 @@ struct uart_rx_data {
 /* FIFO for UART RX data */
 K_FIFO_DEFINE(uart_rx_fifo);
 
-/* Update uartmuxsel GPIO based on client connection state */
-static void update_uartmuxsel_gpio(bool connected)
+/* Update host_console_uart_muxsel GPIO based on client connection state */
+static void update_host_console_uart_muxsel_gpio(bool connected)
 {
 #if DT_NODE_EXISTS(UARTMUXSEL_NODE)
-	if (uartmuxsel_initialized) {
-		gpio_pin_set_dt(&uartmuxsel_gpio, connected ? 1 : 0);
+	if (host_console_uart_muxsel_initialized) {
+		gpio_pin_set_dt(&host_console_uart_muxsel_gpio, connected ? 1 : 0);
 	}
 #endif
 }
@@ -142,7 +142,7 @@ static void uart_tx_thread(void *a, void *b, void *c)
 				LOG_WRN("Socket send error: %d len: %zu", errno, rx_data->len);
 				client_connected = false;
 				active_client_fd = -1;
-				update_uartmuxsel_gpio(false);
+				update_host_console_uart_muxsel_gpio(false);
 			}
 		}
 
@@ -170,7 +170,7 @@ static void handle_client(int client_fd)
 	/* Set active client */
 	active_client_fd = client_fd;
 	client_connected = true;
-	update_uartmuxsel_gpio(true);
+	update_host_console_uart_muxsel_gpio(true);
 
 	/* Enable UART RX to start receiving data */
 	int ret = uart_rx_enable(uart_dev, uart_rx_buf, sizeof(uart_rx_buf), UART_RX_TIMEOUT_US);
@@ -193,7 +193,7 @@ static void handle_client(int client_fd)
 			finished = true;
 			client_connected = false;
 			active_client_fd = -1;
-			update_uartmuxsel_gpio(false);
+			update_host_console_uart_muxsel_gpio(false);
 			break;
 		}
 
@@ -213,7 +213,7 @@ static void handle_client(int client_fd)
 
 	client_connected = false;
 	active_client_fd = -1;
-	update_uartmuxsel_gpio(false);
+	update_host_console_uart_muxsel_gpio(false);
 	LOG_INF("Console bridge client disconnected");
 }
 
@@ -293,23 +293,23 @@ int console_bridge_init(void)
 		return -1;
 	}
 
-	/* Initialize uartmuxsel GPIO */
+	/* Initialize host_console_uart_muxsel GPIO */
 #if DT_NODE_EXISTS(UARTMUXSEL_NODE)
-	if (!gpio_is_ready_dt(&uartmuxsel_gpio)) {
-		LOG_ERR("uartmuxsel GPIO device not ready");
+	if (!gpio_is_ready_dt(&host_console_uart_muxsel_gpio)) {
+		LOG_ERR("host_console_uart_muxsel GPIO device not ready");
 		return -1;
 	}
 
-	ret = gpio_pin_configure_dt(&uartmuxsel_gpio, GPIO_OUTPUT_INACTIVE);
+	ret = gpio_pin_configure_dt(&host_console_uart_muxsel_gpio, GPIO_OUTPUT_INACTIVE);
 	if (ret < 0) {
-		LOG_ERR("Failed to configure uartmuxsel GPIO: %d", ret);
+		LOG_ERR("Failed to configure host_console_uart_muxsel GPIO: %d", ret);
 		return ret;
 	}
 
 	/* Initialize to cleared state (no client connected) */
-	uartmuxsel_initialized = true;
-	update_uartmuxsel_gpio(false);
-	LOG_INF("uartmuxsel GPIO initialized");
+	host_console_uart_muxsel_initialized = true;
+	update_host_console_uart_muxsel_gpio(false);
+	LOG_INF("host_console_uart_muxsel GPIO initialized");
 #endif
 
 	ret = uart_configure(uart_dev, &uart_cfg);

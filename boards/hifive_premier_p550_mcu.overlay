@@ -38,6 +38,7 @@
         status-led = &blue_led;
 
 	host-console-uart = &usart6;
+	host-console-uart-muxsel = &uartmuxsel;
     };
 
 };
