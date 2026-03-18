@@ -26,7 +26,7 @@ jobs:
 
     runs-on: ubuntu-latest
     container:
-      image: zephyrprojectrtos/ci:v0.29.0
+      image: ghcr.io/zephyrproject-rtos/ci-repo-cache:v0.29.0.20260314
 
     strategy:
       matrix:
@@ -76,7 +76,7 @@ jobs:
           west init -l ../wallabmc
 
           # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
-          west update --narrow -o=--depth=10000 -o=--tags
+          west update --path-cache /repo-cache/zephyrproject --narrow -o=--depth=10000 -o=--tags
 
       - name: Build WallaBMC (sysbuild boards)
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
