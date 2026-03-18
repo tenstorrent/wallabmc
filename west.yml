@@ -6,7 +6,7 @@ manifest:
   projects:
     - name: zephyr
       remote: zephyr
-      revision: 8a6ef440c5f
+      revision: 5d653fcfd4f
       import: true
 
   self:
