@@ -542,7 +542,7 @@ static int account_service_get_handler(char *out_buf, size_t out_buf_len)
 }
 
 REDFISH_HANDLER(account_service, "/redfish/v1/AccountService",
-		false, /* require auth */
+		false, /* do not require auth */
 		account_service_get_handler, NULL, NULL);
 
 /* GET /redfish/v1/AccountService/Accounts */
