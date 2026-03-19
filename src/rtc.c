@@ -99,7 +99,7 @@ static int time_iso_to_ts(const char *str, struct timespec *ts)
 		ms = frac;
 
 	ts->tv_sec = epoch_sec;
-	ts->tv_nsec = ms;
+	ts->tv_nsec = (int64_t)ms * NSEC_PER_MSEC;
 
 	return 0;
 }
