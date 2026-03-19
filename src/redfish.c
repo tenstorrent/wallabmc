@@ -195,8 +195,10 @@ static int redfish_handler(struct http_client_ctx *client,
 	int ret;
 	uint32_t allow_methods = 0;
 
-	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED) {
+		in_buffer_len = 0;
 		return 0;
+	}
 
 	if (get_fn)
 		allow_methods |= BIT(HTTP_GET);
