@@ -661,6 +661,9 @@ static int cmd_config_host_auto_poweron(const struct shell *sh, size_t argc, cha
 	} else if (!strcmp(argv[1], "disable")) {
 		config_host_auto_poweron_set(false);
 		shell_info(sh, "Host auto poweron disabled");
+	} else {
+		shell_error(sh, "host auto_poweron: unknown argument %s", argv[1]);
+		return -EINVAL;
 	}
 
 	return 0;
