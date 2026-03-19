@@ -72,7 +72,7 @@ static int validate_auth(struct http_client_ctx *client)
 	const char *b64_token = auth_header + strlen(prefix);
 	size_t token_len = strlen(b64_token);
 
-	static uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
+	uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
 	size_t decoded_len = 0;
 
 	int ret = base64_decode(decoded_buf, sizeof(decoded_buf) - 1, &decoded_len,
@@ -82,11 +82,9 @@ static int validate_auth(struct http_client_ctx *client)
 		return ret;
 	}
 
-	// Null-terminate the decoded string for safety
 	decoded_buf[decoded_len] = '\0';
 
-	// Build the expected string "user:pass"
-	static uint8_t expected[CREDENTIALS_MAX_LEN];
+	uint8_t expected[CREDENTIALS_MAX_LEN];
 	snprintf(expected, sizeof(expected), "%s:%s", "admin", config_bmc_admin_password());
 
 	if (strcmp((char *)decoded_buf, expected) == 0)

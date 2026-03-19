@@ -159,8 +159,7 @@ int ws_validate_auth(int ws_socket, struct http_request_ctx *request_ctx, void *
 
 	const char *auth = rx_buf + sizeof(auth_prefix) - 1;
 
-	// Build the expected string "user_pass"
-	static uint8_t expected[CREDENTIALS_MAX_LEN];
+	uint8_t expected[CREDENTIALS_MAX_LEN];
 	snprintf(expected, sizeof(expected), "%s_%s", "admin", config_bmc_admin_password());
 
 	if (strcmp(auth, expected)) {
