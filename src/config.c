@@ -249,28 +249,34 @@ static const char *ip4_atos(uint32_t a)
 }
 
 /* Not reentrant, don't use outside config.c */
-static uint32_t ip4_stoa(const char *str)
+static int ip4_stoa(const char *str, uint32_t *out)
 {
 	static struct in_addr addr;
 	int rc;
 
 	rc = inet_pton(AF_INET, str, &addr);
 	if (rc != 1) {
-		LOG_ERR("Could not convert IPv4 address %s in_addr", str);
+		LOG_ERR("Could not convert IPv4 address %s to in_addr", str);
 		return -EINVAL;
 	}
 
-	return addr.s_addr;
+	*out = addr.s_addr;
+	return 0;
 }
 
 int config_bmc_default_ip4_set(const char *str)
 {
 	int rc;
 
-	if (str)
-		config_data.bmc_default_ip4 = ip4_stoa(str);
-	else
+	if (str) {
+		rc = ip4_stoa(str, &config_data.bmc_default_ip4);
+		if (rc) {
+			LOG_ERR("Invalid IPv4 address string: %s", str);
+			return rc;
+		}
+	} else {
 		config_data.bmc_default_ip4 = 0; /* Remove default addr */
+	}
 
 	rc = net_do_set_default_ip4_from_config();
 	if (rc) {
@@ -291,10 +297,13 @@ int config_bmc_default_ip4_nm_set(const char *str)
 {
 	int rc;
 
-	if (str)
-		config_data.bmc_default_ip4_nm = ip4_stoa(str);
-	else
+	if (str) {
+		rc = ip4_stoa(str, &config_data.bmc_default_ip4_nm);
+		if (rc)
+			return rc;
+	} else {
 		config_data.bmc_default_ip4_nm = 0;
+	}
 
 	rc = net_do_set_default_ip4_from_config();
 	if (rc) {
@@ -315,10 +324,13 @@ int config_bmc_default_ip4_gw_set(const char *str)
 {
 	int rc;
 
-	if (str)
-		config_data.bmc_default_ip4_gw = ip4_stoa(str);
-	else
+	if (str) {
+		rc = ip4_stoa(str, &config_data.bmc_default_ip4_gw);
+		if (rc)
+			return rc;
+	} else {
 		config_data.bmc_default_ip4_gw = 0;
+	}
 
 	rc = net_do_set_default_ip4_from_config();
 	if (rc) {
