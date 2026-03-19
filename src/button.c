@@ -92,7 +92,7 @@ int button_init(void)
 	/* Interrupt on press and release */
 	ret = gpio_pin_interrupt_configure_dt(&button, GPIO_INT_EDGE_BOTH);
 	if (ret != 0) {
-		LOG_ERR("Error: button device %s failed to configure interrutp on pin %d (err=%d)",
+		LOG_ERR("Error: button device %s failed to configure interrupt on pin %d (err=%d)",
 			button.port->name, button.pin, ret);
 		return ret;
 	}
