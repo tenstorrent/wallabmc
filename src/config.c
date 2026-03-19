@@ -548,6 +548,8 @@ int config_bmc_ntp_server_set(const char *ntp_server)
 
 static int cmd_config_bmc_ntp_server(const struct shell *sh, size_t argc, char **argv)
 {
+	int rc;
+
 	ARG_UNUSED(argc);
 
 	if (!is_boot_finished()) {
@@ -555,7 +557,12 @@ static int cmd_config_bmc_ntp_server(const struct shell *sh, size_t argc, char *
 		return -EAGAIN;
 	}
 
-	config_bmc_ntp_server_set(argv[1]);
+	rc = config_bmc_ntp_server_set(argv[1]);
+	if (rc) {
+		shell_error(sh, "Could not set BMC NTP server (err=%d)", rc);
+		return rc;
+	}
+
 	shell_info(sh, "BMC NTP server updated");
 
 	return 0;
