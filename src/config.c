@@ -510,7 +510,7 @@ static int cmd_config_bmc_ntp(const struct shell *sh, size_t argc, char **argv)
 		config_bmc_use_ntp_set(false);
 		shell_info(sh, "BMC NTP disabled");
 	} else {
-		shell_error(sh, "bmc dhcpv4: unknown argument %s", argv[1]);
+		shell_error(sh, "bmc ntp: unknown argument %s", argv[1]);
 		return -EINVAL;
 	}
 
