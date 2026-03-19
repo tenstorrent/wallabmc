@@ -79,6 +79,13 @@ jobs:
           # Update modules (fetches Zephyr kernel, HAL_STM32, etc.)
           west update --narrow -o=--depth=10000 -o=--tags
 
+      - name: Install Zephyr SDK (if missing)
+        run: |
+            if ! ls /opt/toolchains/zephyr-sdk-* 1> /dev/null 2>&1; then
+              wget https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v0.16.4/zephyr-sdk-0.16.4_linux-x86_64.tar.xz
+              sudo tar xf zephyr-sdk-0.16.4_linux-x86_64.tar.xz -C /opt/toolchains
+            fi
+
       - name: Build WallaBMC (sysbuild boards)
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
         working-directory: workspace
