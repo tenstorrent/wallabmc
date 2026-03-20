@@ -26,7 +26,7 @@ jobs:
 
     runs-on: ubuntu-latest
     container:
-      image: zephyrprojectrtos/ci:v0.28.9
+      image: zephyrprojectrtos/ci:v0.29.0
 
     strategy:
       matrix:
