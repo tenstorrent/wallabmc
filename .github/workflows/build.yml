@@ -24,8 +24,7 @@ jobs:
   build:
     needs: check-spdx
 
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
+    runs-on: ubuntu-latest
     container:
       image: zephyrprojectrtos/ci:v0.28.9
 
@@ -125,8 +124,7 @@ jobs:
             workspace/build/zephyr/zephyr.elf
 
   test:
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
+    runs-on: ubuntu-latest
 
     needs: build
     if: needs.build.result == 'success'
