@@ -72,7 +72,7 @@ static int validate_auth(struct http_client_ctx *client)
 	const char *b64_token = auth_header + strlen(prefix);
 	size_t token_len = strlen(b64_token);
 
-	static uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
+	uint8_t decoded_buf[CREDENTIALS_MAX_LEN];
 	size_t decoded_len = 0;
 
 	int ret = base64_decode(decoded_buf, sizeof(decoded_buf) - 1, &decoded_len,
@@ -82,11 +82,9 @@ static int validate_auth(struct http_client_ctx *client)
 		return ret;
 	}
 
-	// Null-terminate the decoded string for safety
 	decoded_buf[decoded_len] = '\0';
 
-	// Build the expected string "user:pass"
-	static uint8_t expected[CREDENTIALS_MAX_LEN];
+	uint8_t expected[CREDENTIALS_MAX_LEN];
 	snprintf(expected, sizeof(expected), "%s:%s", "admin", config_bmc_admin_password());
 
 	if (strcmp((char *)decoded_buf, expected) == 0)
@@ -195,8 +193,10 @@ static int redfish_handler(struct http_client_ctx *client,
 	int ret;
 	uint32_t allow_methods = 0;
 
-	if (status == HTTP_SERVER_TRANSACTION_ABORTED)
+	if (status == HTTP_SERVER_TRANSACTION_ABORTED) {
+		in_buffer_len = 0;
 		return 0;
+	}
 
 	if (get_fn)
 		allow_methods |= BIT(HTTP_GET);
@@ -542,7 +542,7 @@ static int account_service_get_handler(char *out_buf, size_t out_buf_len)
 }
 
 REDFISH_HANDLER(account_service, "/redfish/v1/AccountService",
-		false, /* require auth */
+		false, /* do not require auth */
 		account_service_get_handler, NULL, NULL);
 
 /* GET /redfish/v1/AccountService/Accounts */
