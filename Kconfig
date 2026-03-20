@@ -168,6 +168,11 @@ config APP_BMC_UUID
 	select UUID_V5
 	select HWINFO
 
+config APP_SENSORS
+	bool "BMC Sensors (temperature)"
+	select SENSOR
+	select ADC
+
 config REDFISH
 	bool "Redfish server"
 	default y
