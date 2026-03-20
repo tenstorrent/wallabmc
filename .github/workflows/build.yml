@@ -14,7 +14,7 @@ jobs:
   check-spdx:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Check SPDX licenses
         uses: tenstorrent/tt-github-actions/.github/actions/spdx-checker@main
         with:
@@ -24,10 +24,9 @@ jobs:
   build:
     needs: check-spdx
 
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
+    runs-on: ubuntu-latest
     container:
-      image: zephyrprojectrtos/ci:v0.28.9
+      image: zephyrprojectrtos/ci:v0.29.0
 
     strategy:
       matrix:
@@ -40,7 +39,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: wallabmc
 
@@ -57,7 +56,7 @@ jobs:
         run: mkdir workspace
 
       - name: Cache West Modules
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         env:
           cache-name: cache-zephyr-modules
         with:
@@ -102,7 +101,7 @@ jobs:
 
       - name: Upload Board Firmware
         if: ${{ matrix.board != 'qemu_cortex_m3' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wallabmc-firmware-${{ matrix.board }}
           path: |
@@ -117,7 +116,7 @@ jobs:
 
       - name: Upload QEMU Firmware
         if: ${{ matrix.board == 'qemu_cortex_m3' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: wallabmc-firmware-${{ matrix.board }}
           path: |
@@ -125,15 +124,14 @@ jobs:
             workspace/build/zephyr/zephyr.elf
 
   test:
-    # ubuntu-latest does not have enough space, use a large TT runner
-    runs-on: tt-ubuntu-2404-large-stable
+    runs-on: ubuntu-latest
 
     needs: build
     if: needs.build.result == 'success'
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: wallabmc
 
@@ -143,7 +141,7 @@ jobs:
           sudo apt-get install -qq telnet qemu-system-arm
 
       - name: Download QEMU Firmware
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: wallabmc-firmware-qemu_cortex_m3
           path: firmware
