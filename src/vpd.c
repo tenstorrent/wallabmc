@@ -8,6 +8,7 @@ LOG_MODULE_REGISTER(wallabmc_vpd, LOG_LEVEL_INF);
 
 #include <zephyr/sys/uuid.h>
 #include <zephyr/drivers/hwinfo.h>
+#include <zephyr/version.h>
 
 #include "vpd.h"
 
@@ -30,6 +31,8 @@ static int cmd_vpd_show(const struct shell *sh, size_t argc, char **argv)
 	}
 
 	shell_print(sh, "BMC UUID: %s", uuid);
+	shell_print(sh, "BMC version: %s", PROJECT_GIT_SHA);
+	shell_print(sh, "BMC Zephyr version: %s", BANNER_VERSION);
 	return 0;
 }
 
