@@ -3,6 +3,12 @@
 
 mainmenu "WallaBMC"
 
+# This UUID should not be changed, it is a namespace from which
+# to generate other UUIDs for WallaBMC.
+config WALLABMC_UUID_NS
+	string
+	default "6ae4c3c7-fff0-472a-a77c-6f3f5a09ee7c"
+
 config APP_DNS_RESOLVE
 	bool
 	select REQUIRES_FULL_LIBC
@@ -153,12 +159,22 @@ config APP_HTTPS_PSK
 	depends on APP_HTTPS
 	select APP_CRYPTO_PSK
 
+config APP_BMC_UUID
+	bool "BMC UUID based on HWINFO device ID"
+	select MBEDTLS
+	select MBEDTLS_PSA_CRYPTO_C
+	select PSA_WANT_ALG_SHA_1
+	select UUID
+	select UUID_V5
+	select HWINFO
+
 config REDFISH
 	bool "Redfish server"
 	default y
 	select HTTP_SERVER
 	select HTTP_SERVER_CAPTURE_HEADERS
 	select JSON_LIBRARY
+	select APP_BMC_UUID
 	select BASE64
 
 if REDFISH
