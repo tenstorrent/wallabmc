@@ -59,6 +59,10 @@
     status = "okay";
 };
 
+&die_temp {
+    status = "okay";
+};
+
 &usart6 {
 	current-speed = <115200>;
 	status = "okay";

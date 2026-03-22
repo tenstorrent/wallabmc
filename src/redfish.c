@@ -27,6 +27,7 @@
 #include "config.h"
 #include "power.h"
 #include "rtc.h"
+#include "sensors.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -457,7 +458,7 @@ static const struct json_obj_descr odata_value_descr[] = {
 				  url, JSON_TOK_STRING),
 };
 
-#define REDFISH_ODATA_VALUES_MAX 4
+#define REDFISH_ODATA_VALUES_MAX 5
 
 struct redfish_odata {
 	const char *odata_context;
@@ -477,12 +478,13 @@ static int odata_get_handler(char *out_buf, size_t out_buf_len)
 {
 	const struct redfish_odata odata = {
 		.odata_context = "/redfish/v1/$metadata",
-		.value_count = 4,
+		.value_count = REDFISH_ODATA_VALUES_MAX,
 		.value = {
 			{ .name = "Service", .kind = "Singleton", .url = "/redfish/v1/", },
 			{ .name = "Systems", .kind = "Singleton", .url = "/redfish/v1/Systems", },
 			{ .name = "Managers", .kind = "Singleton", .url = "/redfish/v1/Managers", },
 			{ .name = "AccountService", .kind = "Singleton", .url = "/redfish/v1/AccountService", },
+			{ .name = "Chassis", .kind = "Singleton", .url = "/redfish/v1/Chassis", },
 		},
 	};
 	int ret;
@@ -1165,6 +1167,26 @@ static const struct json_obj_descr processor_summary_descr[] = {
 };
 
 /* System Info: MemorySummary nested object */
+#define REDFISH_SYSTEM_CHASSIS_MAX	1
+#define REDFISH_SYSTEM_MANAGERS_MAX	1
+
+struct redfish_system_links {
+	size_t chassis_len;
+	struct redfish_link chassis[REDFISH_SYSTEM_CHASSIS_MAX];
+	size_t managed_by_len;
+	struct redfish_link managed_by[REDFISH_SYSTEM_MANAGERS_MAX];
+};
+static const struct json_obj_descr system_links_descr[] = {
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_system_links,
+				       "Chassis", chassis,
+				       REDFISH_SYSTEM_CHASSIS_MAX, chassis_len,
+				       link_descr, ARRAY_SIZE(link_descr)),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_system_links,
+				       "ManagedBy", managed_by,
+				       REDFISH_SYSTEM_MANAGERS_MAX, managed_by_len,
+				       link_descr, ARRAY_SIZE(link_descr)),
+};
+
 struct redfish_memory_summary {
 	int32_t total_system_GiB;
 };
@@ -1179,15 +1201,17 @@ struct redfish_computer_system {
 	const char *id;
 	const char *uuid;
 	const char *name;
+	const char *system_type;
 	const char *manufacturer;
 	const char *model;
+	const char *serial_number;
 	const char *host_name;
 	const char *power_restore_policy;
 	const char *power_state;
-	const char *serial_number;
 	struct redfish_processor_summary processor_summary;
 	struct redfish_memory_summary memory_summary;
 	struct redfish_actions actions;
+	struct redfish_system_links links;
 };
 static const struct json_obj_descr computer_system_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "@odata.id",
@@ -1200,20 +1224,24 @@ static const struct json_obj_descr computer_system_descr[] = {
 				  uuid, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Name",
 				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SystemType",
+				  system_type, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Manufacturer",
 				  manufacturer, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "Model",
 				  model, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
+				  serial_number, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerRestorePolicy",
 				  power_restore_policy, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "PowerState",
 				  power_state, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_computer_system, "SerialNumber",
-				  serial_number, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "ProcessorSummary",
 				    processor_summary, processor_summary_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "MemorySummary",
 				    memory_summary, memory_summary_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Links",
+				    links, system_links_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_computer_system, "Actions",
 				    actions, actions_descr),
 };
@@ -1259,8 +1287,10 @@ static int system_get_handler(char *out_buf, size_t out_buf_len)
 		.id = "system",
 		.uuid = "38947555-7742-3448-3784-823347823834",
 		.name = CONFIG_REDFISH_SYSTEM_PRODUCT_NAME,
+		.system_type = "Physical",
 		.manufacturer = CONFIG_REDFISH_SYSTEM_MANUFACTURER,
 		.model = CONFIG_REDFISH_SYSTEM_MODEL,
+		.serial_number = serial_number,
 		.processor_summary = {
 			.odata_type = "#ProcessorSummary.v1_4_0.ProcessorSummary",
 			.count = CONFIG_REDFISH_SYSTEM_PROCESSOR_COUNT,
@@ -1269,9 +1299,22 @@ static int system_get_handler(char *out_buf, size_t out_buf_len)
 		.memory_summary = {
 			.total_system_GiB = CONFIG_REDFISH_SYSTEM_MEMORY_GIB,
 		},
-		.serial_number = serial_number,
 		.power_restore_policy = config_host_auto_poweron() ? "AlwaysOn" : "AlwaysOff",
 		.power_state = power_get_state() ? "On" : "Off",
+		.links = {
+			.chassis_len = 1,
+			.chassis = {
+				{
+					.odata_id = "/redfish/v1/Chassis/1"
+				},
+			},
+			.managed_by_len = 1,
+			.managed_by = {
+				{
+					.odata_id = "/redfish/v1/Managers/bmc"
+				},
+			},
+		},
 		.actions = {
 			.reset_action = {
 				.target = "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
@@ -1340,6 +1383,258 @@ static int system_reset_post_handler(char *in_buf, size_t in_buf_len)
 REDFISH_HANDLER(system_reset, "/redfish/v1/Systems/system/Actions/ComputerSystem.Reset",
 		true, /* require auth */
 		NULL, NULL, system_reset_post_handler);
+
+/*** /redfish/v1/Chassis ***/
+/* GET /redfish/v1/Chassis */
+static int chassis_collection_get_handler(char *out_buf, size_t out_buf_len)
+{
+	const struct redfish_collection chassis_collection = {
+		.odata_id = "/redfish/v1/Chassis",
+		.odata_type = "#ChassisCollection.ChassisCollection",
+		.name = "Chassis Collection",
+		.members_count = 1,
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Chassis/1"
+			}
+		},
+		.members_len = 1
+	};
+	int ret;
+
+	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
+				  &chassis_collection, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode chassis collection: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(chassis_collection, "/redfish/v1/Chassis",
+		true, /* require auth */
+		chassis_collection_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1 ***/
+#define REDFISH_CHASSIS_COMPUTER_SYSTEMS_MAX	1
+
+struct redfish_chassis_links {
+	size_t computer_systems_len;
+	struct redfish_link computer_systems[REDFISH_CHASSIS_COMPUTER_SYSTEMS_MAX];
+	size_t managed_by_len;
+	struct redfish_link managed_by[REDFISH_SYSTEM_MANAGERS_MAX];
+};
+static const struct json_obj_descr chassis_links_descr[] = {
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_chassis_links,
+				       "ComputerSystems", computer_systems,
+				       REDFISH_CHASSIS_COMPUTER_SYSTEMS_MAX, computer_systems_len,
+				       link_descr, ARRAY_SIZE(link_descr)),
+	JSON_OBJ_DESCR_OBJ_ARRAY_NAMED(struct redfish_chassis_links,
+				       "ManagedBy", managed_by,
+				       REDFISH_SYSTEM_MANAGERS_MAX, managed_by_len,
+				       link_descr, ARRAY_SIZE(link_descr)),
+};
+
+struct redfish_chassis {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	const char *chassis_type;
+	const char *manufacturer;
+	const char *model;
+	const char *serial_number;
+	const char *power_state;
+	struct redfish_link sensors;
+	struct redfish_chassis_links links;
+};
+static const struct json_obj_descr chassis_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "ChassisType",
+				  chassis_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "Manufacturer",
+				  manufacturer, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "Model",
+				  model, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "SerialNumber",
+				  serial_number, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "PowerState",
+				  power_state, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Sensors",
+				    sensors, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Links",
+				    links, chassis_links_descr),
+};
+
+/* GET /redfish/v1/Chassis/1 */
+static int chassis_get_handler(char *out_buf, size_t out_buf_len)
+{
+	const struct redfish_chassis chassis = {
+		.odata_id = "/redfish/v1/Chassis/1",
+		.odata_type = "#Chassis.v1_22_0.Chassis",
+		.id = "1",
+		.name = "Chassis",
+		.chassis_type = "StandAlone",
+		.manufacturer = CONFIG_REDFISH_SYSTEM_MANUFACTURER,
+		.model = CONFIG_REDFISH_SYSTEM_MODEL,
+		.serial_number = serial_number,
+		.power_state = power_get_state() ? "On" : "Off",
+		.sensors = {
+			.odata_id = "/redfish/v1/Chassis/1/Sensors"
+		},
+		.links = {
+			.computer_systems_len = 1,
+			.computer_systems = {
+				{
+					.odata_id = "/redfish/v1/Systems/system"
+				},
+			},
+			.managed_by_len = 1,
+			.managed_by = {
+				{
+					.odata_id = "/redfish/v1/Managers/bmc"
+				},
+			},
+		},
+	};
+	int ret;
+
+	ret = json_obj_encode_buf(chassis_descr, ARRAY_SIZE(chassis_descr),
+				       &chassis, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode chassis: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(chassis, "/redfish/v1/Chassis/1",
+		true, /* require auth */
+		chassis_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Sensors ***/
+
+#ifdef CONFIG_APP_SENSORS
+#define REDFISH_SENSORS_MEMBERS_MAX	1
+#else
+#define REDFISH_SENSORS_MEMBERS_MAX	0
+#endif
+
+/* GET /redfish/v1/Chassis/1/Sensors */
+static int sensors_collection_get_handler(char *out_buf, size_t out_buf_len)
+{
+	const struct redfish_collection sensors_collection = {
+		.odata_id = "/redfish/v1/Chassis/1/Sensors",
+		.odata_type = "#SensorCollection.SensorCollection",
+		.name = "Chassis Sensor Collection",
+		.members_count = REDFISH_SENSORS_MEMBERS_MAX,
+#ifdef CONFIG_APP_SENSORS
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Chassis/1/Sensors/TempBmc"
+			}
+		},
+		.members_len = 1,
+#else
+		.members_len = 0,
+#endif
+	};
+	int ret;
+
+	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
+				  &sensors_collection, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode sensors collection: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(sensors_collection, "/redfish/v1/Chassis/1/Sensors",
+		true, /* require auth */
+		sensors_collection_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Sensors/TempBmc ***/
+
+#ifdef CONFIG_APP_SENSORS
+struct redfish_sensor {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	int32_t reading;
+	const char *reading_type;
+	const char *reading_units;
+	const char *physical_context;
+};
+static const struct json_obj_descr sensor_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Reading",
+				  reading, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "ReadingType",
+				  reading_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "ReadingUnits",
+				  reading_units, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "PhysicalContext",
+				  physical_context, JSON_TOK_STRING),
+};
+
+/* GET /redfish/v1/Chassis/1/Sensors/TempBmc */
+static int sensor_temp_bmc_get_handler(char *out_buf, size_t out_buf_len)
+{
+	struct redfish_sensor sensor_temp_bmc = {
+		.odata_id = "/redfish/v1/Chassis/1/Sensors/TempBmc",
+		.odata_type = "#Sensor.v1_2_0.Sensor",
+		.id = "TempBmc",
+		.name = "BMC SoC Temperature",
+		.reading = 40,
+		.reading_type = "Temperature",
+		.reading_units = "Cel",
+		.physical_context = "ManagementController",
+	};
+	struct sensor_value val;
+	int ret;
+
+	ret = read_die_temperature(&val);
+	if (ret < 0) {
+		/* XXX: mark sensor as not okay? */
+		sensor_temp_bmc.reading = -1;
+	} else {
+		/* XXX: how to do decimals without FP */
+		sensor_temp_bmc.reading = val.val1;
+	}
+
+	ret = json_obj_encode_buf(sensor_descr, ARRAY_SIZE(sensor_descr),
+				       &sensor_temp_bmc, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode Sensor TempBmc: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(sensor_temp_bmc, "/redfish/v1/Chassis/1/Sensors/TempBmc",
+		true, /* require auth */
+		sensor_temp_bmc_get_handler, NULL, NULL);
+#endif /* CONFIG_APP_SENSORS */
 
 /*** /redfish/v1/$metadata ***/
 static const uint8_t redfish_metadata_xml_gz[] = {

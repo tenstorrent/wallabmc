@@ -153,6 +153,11 @@ config APP_HTTPS_PSK
 	depends on APP_HTTPS
 	select APP_CRYPTO_PSK
 
+config APP_SENSORS
+	bool "BMC Sensors (temperature)"
+	select SENSOR
+	select ADC
+
 config REDFISH
 	bool "Redfish server"
 	default y

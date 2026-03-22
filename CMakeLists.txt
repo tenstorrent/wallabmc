@@ -64,6 +64,10 @@ target_sources_ifdef(CONFIG_RTC app PRIVATE
 	src/rtc.c
 )
 
+target_sources_ifdef(CONFIG_APP_SENSORS app PRIVATE
+	src/sensors.c
+)
+
 target_sources_ifdef(CONFIG_APP_NTP app PRIVATE
 	src/ntp.c
 )

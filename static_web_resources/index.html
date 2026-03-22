@@ -9,6 +9,7 @@
 	<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-attach@0.9.0/lib/xterm-addon-attach.min.js"></script>
 	<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 	<style>
 		:root {
 			/* Palette */
@@ -272,6 +273,21 @@
 		.hidden { display: none !important; }
 		.helper-text { font-size: 0.85em; color: var(--text-muted); margin-top: 10px; }
 
+		/* Sensors */
+		.chart-container {
+			width: 80%;
+			max-width: 800px;
+			background: white;
+			padding: 20px;
+			border-radius: 8px;
+			box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+		}
+		#error-msg {
+			color: red;
+			margin-top: 10px;
+			font-weight: bold;
+		}
+
 		/* Terminal Modal */
 		.modal-overlay {
 			position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -461,6 +477,17 @@
 					<button onclick="refreshConfigData()">Discard Changes</button>
 				</div>
 			</div>
+
+			<div id="sensors-card" class="card hidden">
+				<div class="section-header-flex">
+					<h2>Sensors</h2>
+				</div>
+				<h3>BMC SoC Temperature</h3>
+				<div class="chart-container">
+					<canvas id="tempChart"></canvas>
+				</div>
+				<div id="error-msg"></div>
+			</div>
 		</div>
 
 		<div id="host-term-modal" class="modal-overlay hidden">
@@ -498,7 +525,9 @@
 		// Redfish URI paths
 		let accountServiceIdPath = null;
 		let systemIdPath = null;
+		let chassisIdPath = null;
 		let managerIdPath = null;
+		let sensorTempIdPath = null;
 		let networkProtocolIdPath = null;
 		let ethIdPath = null;
 		let accountIdPath = null;
@@ -509,7 +538,11 @@
 		let networkProtocolData = null;
 		let ethData = null;
 
+		let tempChart = null;
+		const SENSORS_POLL_INTERVAL_MS = 10000;
+
 		let refreshTimer = null;
+		let sensorsTimer = null;
 
 		// UI Helpers
 		const show = (id) => document.getElementById(id).classList.remove('hidden');
@@ -588,6 +621,26 @@
 					throw new Error("No redfish ComputerSystem found.");
 				systemIdPath = systemsRoot.Members[0]['@odata.id'];
 
+				// Discover Chassis
+				const chassisRoot = await redfishCall('/redfish/v1/Chassis');
+				if (!chassisRoot.Members || chassisRoot.Members.length === 0)
+					throw new Error("No redfish Chassis found.");
+				chassisIdPath = chassisRoot.Members[0]['@odata.id'];
+
+				// Discover Sensors
+				const sensorsRoot = await redfishCall(`${chassisIdPath}/Sensors`);
+				if (sensorsRoot.Members) {
+					for (let member of sensorsRoot.Members) {
+						const path = member['@odata.id'];
+						const sensor = await redfishCall(path);
+						if (sensor.PhysicalContext === "ManagementController" &&
+						    sensor.ReadingType === "Temperature") {
+							sensorTempIdPath = path
+							break;
+						}
+					}
+				}
+
 				// Discover Manager (BMC) and BMC Ethernet Interface
 				const managersRoot = await redfishCall('/redfish/v1/Managers');
 				if (!managersRoot.Members || managersRoot.Members.length === 0)
@@ -597,7 +650,7 @@
 
 				const ethRoot = await redfishCall(`${managerIdPath}/EthernetInterfaces`);
 				if (!ethRoot.Members || ethRoot.Members.length === 0)
-					console.log(`No BMC Eithernet found`)
+					console.log(`No BMC Ethernet found`)
 				else
 					ethIdPath = ethRoot.Members[0]['@odata.id'];
 
@@ -605,7 +658,7 @@
 				const accountsRoot = await redfishCall(`${accountServiceIdPath}/Accounts`);
 				if (accountsRoot.Members) {
 					for (let member of accountsRoot.Members) {
-						path = member['@odata.id'];
+						const path = member['@odata.id'];
 						const account = await redfishCall(path);
 						if (account.UserName === user) {
 							accountIdPath = path
@@ -616,11 +669,20 @@
 				if (!accountIdPath)
 					throw new Error("No redfish user account found.");
 
+				if (sensorTempIdPath) {
+					initSensors();
+					document.getElementById('sensors-card').classList.remove('hidden');
+				} else {
+					console.log("No BMC temperature sensor found.");
+				}
+
 				hide('login-section');
 				show('dashboard-section');
 
 				await refreshSystemData();
 				await refreshConfigData();
+				if (sensorTempIdPath)
+					await updateSensors();
 
 			} catch (err) {
 				show('login-error');
@@ -631,9 +693,16 @@
 		}
 
 		function logout() {
+			if (tempChart)
+				tempChart.destroy();
+			tempChart = null;
+
 			if (refreshTimer)
 				clearTimeout(refreshTimer);
 			refreshTimer = null;
+			if (sensorsTimer)
+				clearTimeout(sensorsTimer);
+			sensorsTimer = null;
 			closeTerminal(true);
 			closeTerminal(false);
 
@@ -650,6 +719,7 @@
 		async function refreshSystemData() {
 			if (refreshTimer)
 				clearTimeout(refreshTimer);
+			refreshTimer = null;
 
 			try {
 				sysData = await redfishCall(systemIdPath);
@@ -659,8 +729,7 @@
 					ethData = await redfishCall(ethIdPath);
 			} catch (err) {
 				console.error("Refresh failed", err);
-				if (refreshTimer)
-					refreshTimer = setTimeout(refreshSystemData, 3000);
+				refreshTimer = setTimeout(refreshSystemData, 3000);
 				return;
 			}
 
@@ -699,8 +768,7 @@
 				}
 			}
 
-			if (refreshTimer)
-				refreshTimer = setTimeout(refreshSystemData, 10000);
+			refreshTimer = setTimeout(refreshSystemData, 10000);
 		}
 
 		async function refreshConfigData() {
@@ -728,6 +796,90 @@
 					document.getElementById('cfg-static-gateway').value = null;
 				}
 			}
+		}
+
+		function initSensors() {
+			if (tempChart)
+				return;
+
+			const ctx = document.getElementById('tempChart');
+			tempChart = new Chart(ctx, {
+				type: 'line',
+				data: {
+					labels: [],
+					datasets: [{
+						label: 'Temperature (°C)',
+						data: [],
+						borderColor: 'rgb(255, 99, 132)',
+						backgroundColor: 'rgba(255, 99, 132, 0.2)',
+						borderWidth: 2,
+						pointRadius: 3,
+						fill: false,
+						tension: 0.3 // Smooth curves
+					}]
+				},
+				options: {
+					responsive: true,
+					scales: {
+						x: {
+							title: { display: false, text: 'Time' }
+						},
+						y: {
+							title: { display: true, text: 'Celsius' },
+							suggestedMin: 0,
+							suggestedMax: 60
+						}
+					},
+					animation: {
+						duration: 0 // Disable animation for cleaner scrolling
+					},
+					plugins: {
+						legend: {
+							display: false
+						}
+					}
+				}
+			});
+		}
+
+		function updateChart(tempValue) {
+			const SENSORS_DATAPOINTS = 30;
+			const now = new Date();
+			const timeString = now.toLocaleTimeString();
+
+			// Add new data
+			tempChart.data.labels.push(timeString);
+			tempChart.data.datasets[0].data.push(tempValue);
+
+			// Remove oldest data point if we exceed the max length (creates the scroll)
+			if (tempChart.data.labels.length > SENSORS_DATAPOINTS) {
+				tempChart.data.labels.shift();
+				tempChart.data.datasets[0].data.shift();
+			}
+
+			tempChart.update();
+		}
+
+		async function updateSensors() {
+			if (sensorsTimer)
+				clearTimeout(sensorsTimer);
+			sensorsTimer = null;
+
+			const errorDiv = document.getElementById('error-msg');
+
+			try {
+				const sensorData = await redfishCall(`${sensorTempIdPath}`);
+				const temperature = sensorData.Reading;
+				if (temperature === undefined)
+					throw new Error('Could not find "Reading" in Redfish response.');
+				updateChart(temperature);
+				errorDiv.innerText = ''; // Clear any previous errors
+
+			} catch (error) {
+				console.error('Failed to fetch Redfish data:', error);
+				errorDiv.innerText = `Error fetching data: ${error.message}. See console for details.`;
+			}
+			sensorsTimer = setTimeout(updateSensors, SENSORS_POLL_INTERVAL_MS);
 		}
 
 		async function saveBmcConfig() {
