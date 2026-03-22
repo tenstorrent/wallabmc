@@ -27,6 +27,7 @@
 #include "config.h"
 #include "power.h"
 #include "rtc.h"
+#include "sensors.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -1445,6 +1446,7 @@ struct redfish_chassis {
 	const char *model;
 	const char *serial_number;
 	const char *power_state;
+	struct redfish_link sensors;
 	struct redfish_chassis_links links;
 };
 static const struct json_obj_descr chassis_descr[] = {
@@ -1466,6 +1468,8 @@ static const struct json_obj_descr chassis_descr[] = {
 				  serial_number, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_chassis, "PowerState",
 				  power_state, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Sensors",
+				    sensors, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_chassis, "Links",
 				    links, chassis_links_descr),
 };
@@ -1483,6 +1487,9 @@ static int chassis_get_handler(char *out_buf, size_t out_buf_len)
 		.model = CONFIG_REDFISH_SYSTEM_MODEL,
 		.serial_number = serial_number,
 		.power_state = power_get_state() ? "On" : "Off",
+		.sensors = {
+			.odata_id = "/redfish/v1/Chassis/1/Sensors"
+		},
 		.links = {
 			.computer_systems_len = 1,
 			.computer_systems = {
@@ -1513,6 +1520,121 @@ static int chassis_get_handler(char *out_buf, size_t out_buf_len)
 REDFISH_HANDLER(chassis, "/redfish/v1/Chassis/1",
 		true, /* require auth */
 		chassis_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Sensors ***/
+
+#ifdef CONFIG_APP_SENSORS
+#define REDFISH_SENSORS_MEMBERS_MAX	1
+#else
+#define REDFISH_SENSORS_MEMBERS_MAX	0
+#endif
+
+/* GET /redfish/v1/Chassis/1/Sensors */
+static int sensors_collection_get_handler(char *out_buf, size_t out_buf_len)
+{
+	const struct redfish_collection sensors_collection = {
+		.odata_id = "/redfish/v1/Chassis/1/Sensors",
+		.odata_type = "#SensorCollection.SensorCollection",
+		.name = "Chassis Sensor Collection",
+		.members_count = REDFISH_SENSORS_MEMBERS_MAX,
+#ifdef CONFIG_APP_SENSORS
+		.members = {
+			{
+				.odata_id = "/redfish/v1/Chassis/1/Sensors/TempBmc"
+			}
+		},
+		.members_len = 1,
+#else
+		.members_len = 0,
+#endif
+	};
+	int ret;
+
+	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
+				  &sensors_collection, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode sensors collection: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(sensors_collection, "/redfish/v1/Chassis/1/Sensors",
+		true, /* require auth */
+		sensors_collection_get_handler, NULL, NULL);
+
+/*** /redfish/v1/Chassis/1/Sensors/TempBmc ***/
+
+#ifdef CONFIG_APP_SENSORS
+struct redfish_sensor {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	int32_t reading;
+	const char *reading_type;
+	const char *reading_units;
+	const char *physical_context;
+};
+static const struct json_obj_descr sensor_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "@odata.id",
+				  odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "@odata.type",
+				  odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Id",
+				  id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Name",
+				  name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "Reading",
+				  reading, JSON_TOK_NUMBER),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "ReadingType",
+				  reading_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "ReadingUnits",
+				  reading_units, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_sensor, "PhysicalContext",
+				  physical_context, JSON_TOK_STRING),
+};
+
+/* GET /redfish/v1/Chassis/1/Sensors/TempBmc */
+static int sensor_temp_bmc_get_handler(char *out_buf, size_t out_buf_len)
+{
+	struct redfish_sensor sensor_temp_bmc = {
+		.odata_id = "/redfish/v1/Chassis/1/Sensors/TempBmc",
+		.odata_type = "#Sensor.v1_2_0.Sensor",
+		.id = "TempBmc",
+		.name = "BMC SoC Temperature",
+		.reading = 40,
+		.reading_type = "Temperature",
+		.reading_units = "Cel",
+		.physical_context = "ManagementController",
+	};
+	struct sensor_value val;
+	int ret;
+
+	ret = read_die_temperature(&val);
+	if (ret < 0) {
+		/* XXX: mark sensor as not okay? */
+		sensor_temp_bmc.reading = -1;
+	} else {
+		/* XXX: how to do decimals without FP */
+		sensor_temp_bmc.reading = val.val1;
+	}
+
+	ret = json_obj_encode_buf(sensor_descr, ARRAY_SIZE(sensor_descr),
+				       &sensor_temp_bmc, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode Sensor TempBmc: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(sensor_temp_bmc, "/redfish/v1/Chassis/1/Sensors/TempBmc",
+		true, /* require auth */
+		sensor_temp_bmc_get_handler, NULL, NULL);
+#endif /* CONFIG_APP_SENSORS */
 
 /*** /redfish/v1/$metadata ***/
 static const uint8_t redfish_metadata_xml_gz[] = {
