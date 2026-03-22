@@ -685,6 +685,21 @@ REDFISH_HANDLER(managers_collection, "/redfish/v1/Managers",
 		managers_collection_get_handler, NULL, NULL);
 
 /*** /redfish/v1/Managers/bmc ***/
+struct redfish_manager_oem_wallabmc {
+	const char *zephyr_version;
+};
+static const struct json_obj_descr manager_oem_wallabmc_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager_oem_wallabmc,
+				   "ZephyrVersion", zephyr_version,
+				   JSON_TOK_STRING),
+};
+struct redfish_manager_oem {
+	struct redfish_manager_oem_wallabmc wallabmc;
+};
+static const struct json_obj_descr manager_oem_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager_oem, "WallaBMC",
+				     wallabmc, manager_oem_wallabmc_descr),
+};
 struct redfish_manager {
 	const char *odata_id;
 	const char *odata_type;
@@ -692,6 +707,8 @@ struct redfish_manager {
 	const char *name;
 	const char *uuid;
 	const char *date_time;
+	const char *firmware_version;
+	struct redfish_manager_oem oem;
 	struct redfish_link ethernet_interfaces;
 };
 static const struct json_obj_descr manager_descr[] = {
@@ -701,6 +718,8 @@ static const struct json_obj_descr manager_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "Name", name, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "UUID", uuid, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "DateTime", date_time, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager, "FirmwareVersion", firmware_version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "Oem", oem, manager_oem_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_manager, "EthernetInterfaces", ethernet_interfaces, link_descr),
 };
 
@@ -750,6 +769,8 @@ static int manager_get_handler(char *out_buf, size_t out_buf_len)
 		.uuid = "58893887-8974-2487-2389-389233423423",
 		.name = "WallaBMC",
 		.date_time = get_iso_time(),
+		.firmware_version = PROJECT_GIT_SHA,
+		.oem = { .wallabmc = { .zephyr_version = ZEPHYR_GIT_SHA } },
 		.ethernet_interfaces = {
 			.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
 		},

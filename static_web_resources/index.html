@@ -376,6 +376,14 @@
 						<span class="info-item-label">Name</span>
 						<span class="data-value" id="bmc-name">Loading...</span>
 					</div>
+					<div class="info-item">
+						<span class="info-item-label">WallaBMC Version</span>
+						<span class="data-value" id="bmc-firmware-version">Loading...</span>
+					</div>
+					<div class="info-item">
+						<span class="info-item-label">Zephyr Version</span>
+						<span class="data-value" id="bmc-zephyr-version">Loading...</span>
+					</div>
 				</div>
 
 				<h3>Security</h3>
@@ -680,6 +688,8 @@
 
 			setText('bmc-uuid', bmcData.UUID);
 			setText('bmc-name', bmcData.Name);
+			setText('bmc-firmware-version', bmcData.FirmwareVersion);
+			setText('bmc-zephyr-version', bmcData.Oem && bmcData.Oem.WallaBMC && bmcData.Oem.WallaBMC.ZephyrVersion);
 
 			const bmc_date = new Date(bmcData.DateTime);
 			setText('bmc-date-time', bmc_date.toLocaleString(undefined,

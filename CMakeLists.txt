@@ -38,6 +38,20 @@ endif()
 # Define project git SHA1 as compile-time string constant
 target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
+# Get Zephyr git SHA1
+if(NOT DEFINED ZEPHYR_GIT_SHA)
+	execute_process(
+		COMMAND git -C ${ZEPHYR_BASE} describe --long --always --abbrev=7
+		OUTPUT_VARIABLE ZEPHYR_GIT_SHA
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_QUIET
+	)
+	if(NOT DEFINED ZEPHYR_GIT_SHA OR ZEPHYR_GIT_SHA STREQUAL "")
+		set(ZEPHYR_GIT_SHA "unknown")
+	endif()
+endif()
+target_compile_definitions(app PRIVATE ZEPHYR_GIT_SHA="${ZEPHYR_GIT_SHA}")
+
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
   NAME http_resource_desc_web_https_service
