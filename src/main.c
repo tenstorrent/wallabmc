@@ -8,7 +8,6 @@
 LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 
 #include <zephyr/kernel.h>
-#include <zephyr/version.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/sys/poweroff.h>
 #include <zephyr/shell/shell.h>
@@ -32,13 +31,6 @@ bool is_boot_finished(void)
 {
 	return boot_finished;
 }
-
-/* Taken from zephyr/kernel/banner.c */
-#if defined(BUILD_VERSION) && !IS_EMPTY(BUILD_VERSION)
-#define BANNER_VERSION STRINGIFY(BUILD_VERSION)
-#else
-#define BANNER_VERSION KERNEL_VERSION_STRING
-#endif /* BUILD_VERSION */
 
 static void print_banner(void)
 {
