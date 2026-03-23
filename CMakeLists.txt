@@ -58,6 +58,7 @@ target_sources(app PRIVATE
 	src/net.c
 	src/power.c
 	src/synch.c
+	src/vpd.c
 )
 
 target_sources_ifdef(CONFIG_RTC app PRIVATE

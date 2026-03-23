@@ -24,6 +24,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "console_logger.h"
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
+#include "vpd.h"
 
 static bool boot_finished = false;
 
@@ -203,6 +204,12 @@ int main(void)
 	LOG_DBG("RTC init");
 	if (rtc_init() < 0) {
 		LOG_ERR("RTC init failed");
+		return -1;
+	}
+
+	LOG_DBG("VPD init");
+	if (vpd_init() < 0) {
+		LOG_ERR("VPD init failed");
 		return -1;
 	}
 
