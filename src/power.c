@@ -18,7 +18,7 @@ LOG_MODULE_REGISTER(wallabmc_power);
 
 #define GPIO_POWER_1 DT_ALIAS(power_gpio_1)
 #define GPIO_POWER_2 DT_ALIAS(power_gpio_2)
-#define GPIO_RESET DT_ALIAS(reset_gpio)
+#define GPIO_RESET DT_ALIAS(reset_gpio_1)
 #define STATUS_LED DT_ALIAS(status_led)
 
 static const struct gpio_dt_spec power_gpios[] = {
