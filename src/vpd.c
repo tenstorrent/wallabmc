@@ -8,8 +8,41 @@ LOG_MODULE_REGISTER(wallabmc_vpd, LOG_LEVEL_INF);
 
 #include <zephyr/sys/uuid.h>
 #include <zephyr/drivers/hwinfo.h>
+#include <zephyr/version.h>
 
 #include "vpd.h"
+
+#ifdef CONFIG_SHELL
+#include <zephyr/shell/shell.h>
+#include <zephyr/sys/util.h>
+
+static int cmd_vpd_show(const struct shell *sh, size_t argc, char **argv)
+{
+	const char *uuid;
+	int ret;
+
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
+
+	ret = get_bmc_uuid_string(&uuid);
+	if (ret < 0) {
+		shell_error(sh, "Could not get BMC UUID (err=%d)", ret);
+		return ret;
+	}
+
+	shell_print(sh, "BMC UUID: %s", uuid);
+	shell_print(sh, "BMC version: %s", PROJECT_GIT_SHA);
+	shell_print(sh, "BMC Zephyr version: %s", BANNER_VERSION);
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(sub_vpd_cmds,
+	SHELL_CMD(show, NULL, "Show VPD.", cmd_vpd_show),
+	SHELL_SUBCMD_SET_END
+);
+
+SHELL_CMD_REGISTER(vpd, &sub_vpd_cmds, "Vital product data", NULL);
+#endif /* CONFIG_SHELL */
 
 #ifdef CONFIG_APP_BMC_UUID
 static char bmc_uuid_str[UUID_STR_LEN];
