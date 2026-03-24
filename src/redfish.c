@@ -240,7 +240,7 @@ static int redfish_handler(struct http_client_ctx *client,
 		else /* client->method == HTTP_POST */
 			ret = post_fn(in_buffer, in_buffer_len);
 		in_buffer_len = 0;
-		if (ret < 0)
+		if (ret)
 			response_ctx->status = ret;
 		else
 			response_ctx->status = HTTP_204_NO_CONTENT; /* 204 is success */
@@ -251,7 +251,7 @@ static int redfish_handler(struct http_client_ctx *client,
 			return 0;
 
 		ret = get_fn(out_buffer, sizeof(out_buffer));
-		if (ret < 0) {
+		if (ret) {
 			response_ctx->status = ret;
 		} else {
 			response_ctx->body = (uint8_t *)out_buffer;
