@@ -221,15 +221,24 @@ static bool append_user_data(struct http_resource_user_data *user_data, const vo
 	return true;
 }
 
+static int user_data_json_append(const char *bytes, size_t len, void *data)
+{
+	struct http_resource_user_data *user_data = data;
+
+	if (!append_user_data(user_data, bytes, len))
+		return -ENOSPC;
+	return 0;
+}
+
 static int redfish_handler(struct http_client_ctx *client,
 			   enum http_transaction_status status,
 			   const struct http_request_ctx *request_ctx,
 			   struct http_response_ctx *response_ctx,
 			   struct http_resource_user_data *user_data,
 			   bool require_auth,
-			   int (*get_fn)(char *out_buf, size_t out_buf_len),
-			   int (*patch_fn)(char *in_buf, size_t in_buf_len),
-			   int (*post_fn)(char *in_buf, size_t in_buf_len))
+			   int (*get_fn)(struct http_resource_user_data *user_data),
+			   int (*patch_fn)(struct http_resource_user_data *user_data),
+			   int (*post_fn)(struct http_resource_user_data *user_data))
 {
 	uint32_t allow_methods = 0;
 	int ret;
@@ -271,7 +280,7 @@ static int redfish_handler(struct http_client_ctx *client,
 		if (!user_data->started)
 			alloc_user_data(user_data, USER_DATA_BUFFER_POST_SIZE);
 
-		/* Accumulate requests into the in_buffer, until the final request. */
+		/* Accumulate requests into the user_buffer, until the final request. */
 		if (request_ctx->data && request_ctx->data_len > 0) {
 			if (!append_user_data(user_data, request_ctx->data, request_ctx->data_len)) {
 				LOG_ERR("Payload too large");
@@ -286,9 +295,9 @@ static int redfish_handler(struct http_client_ctx *client,
 			return 0;
 
 		if (client->method == HTTP_PATCH)
-			ret = patch_fn(user_data->data_buffer, user_data->data_len);
+			ret = patch_fn(user_data);
 		else /* client->method == HTTP_POST */
-			ret = post_fn(user_data->data_buffer, user_data->data_len);
+			ret = post_fn(user_data);
 		free_user_data(user_data);
 		if (ret)
 			response_ctx->status = ret;
@@ -310,12 +319,12 @@ static int redfish_handler(struct http_client_ctx *client,
 
 		alloc_user_data(user_data, USER_DATA_BUFFER_GET_SIZE);
 
-		ret = get_fn(user_data->data_buffer, user_data->size);
+		ret = get_fn(user_data);
 		if (ret) {
 			response_ctx->status = ret;
 		} else {
 			response_ctx->body = user_data->data_buffer;
-			response_ctx->body_len = strlen(user_data->data_buffer);
+			response_ctx->body_len = user_data->data_len;
 			response_ctx->status = HTTP_200_OK;
 		}
 	} else {
@@ -420,15 +429,15 @@ static const struct json_obj_descr version_descr[] = {
 };
 
 /* GET /redfish/ */
-static int redfish_version_get_handler(char *out_buf, size_t out_buf_len)
+static int redfish_version_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_version version = {
 		.v1 = "/redfish/v1/"
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(version_descr, ARRAY_SIZE(version_descr),
-				  &version, out_buf, out_buf_len);
+	ret = json_obj_encode(version_descr, ARRAY_SIZE(version_descr),
+			      &version, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode redfish/v1/: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -476,7 +485,7 @@ static const struct json_obj_descr service_root_descr[] = {
 };
 
 /* GET /redfish/v1/ */
-static int service_root_get_handler(char *out_buf, size_t out_buf_len)
+static int service_root_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_service_root service_root = {
 		.odata_type = "#ServiceRoot.v1_16_1.ServiceRoot",
@@ -497,8 +506,8 @@ static int service_root_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(service_root_descr, ARRAY_SIZE(service_root_descr),
-				  &service_root, out_buf, out_buf_len);
+	ret = json_obj_encode(service_root_descr, ARRAY_SIZE(service_root_descr),
+				&service_root, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode service root: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -544,7 +553,7 @@ static const struct json_obj_descr odata_descr[] = {
 };
 
 /* GET /redfish/v1/odata */
-static int odata_get_handler(char *out_buf, size_t out_buf_len)
+static int odata_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_odata odata = {
 		.odata_context = "/redfish/v1/$metadata",
@@ -558,8 +567,8 @@ static int odata_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(odata_descr, ARRAY_SIZE(odata_descr),
-				  &odata, out_buf, out_buf_len);
+	ret = json_obj_encode(odata_descr, ARRAY_SIZE(odata_descr),
+				&odata, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode odata: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -589,7 +598,7 @@ static const struct json_obj_descr account_service_descr[] = {
 };
 
 /* GET /redfish/v1/AccountService */
-static int account_service_get_handler(char *out_buf, size_t out_buf_len)
+static int account_service_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_account_service account_service = {
 		.odata_id = "/redfish/v1/AccountService",
@@ -602,8 +611,8 @@ static int account_service_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(account_service_descr, ARRAY_SIZE(account_service_descr),
-				  &account_service, out_buf, out_buf_len);
+	ret = json_obj_encode(account_service_descr, ARRAY_SIZE(account_service_descr),
+				&account_service, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode account service: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -617,7 +626,7 @@ REDFISH_HANDLER(account_service, "/redfish/v1/AccountService",
 		account_service_get_handler, NULL, NULL);
 
 /* GET /redfish/v1/AccountService/Accounts */
-static int accounts_collection_get_handler(char *out_buf, size_t out_buf_len)
+static int accounts_collection_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_collection accounts_collection = {
 		.odata_id = "/redfish/v1/AccountService/Accounts",
@@ -633,8 +642,8 @@ static int accounts_collection_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
-				  &accounts_collection, out_buf, out_buf_len);
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+				&accounts_collection, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode manager: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -669,13 +678,13 @@ static const struct json_obj_descr account_descr[] = {
 };
 
 /* PATCH /redfish/v1/AccountService/Account/1 */
-static int account_patch_handler(char *in_buf, size_t in_buf_len)
+static int account_patch_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_account payload;
 	int ret;
 
 	memset(&payload, 0, sizeof(payload));
-	ret = json_obj_parse(in_buf, in_buf_len,
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
 			     account_descr, ARRAY_SIZE(account_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("Account: Bad JSON (err=%d)", ret);
@@ -691,7 +700,7 @@ static int account_patch_handler(char *in_buf, size_t in_buf_len)
 }
 
 /* GET /redfish/v1/AccountService/Account/1 */
-static int account_get_handler(char *out_buf, size_t out_buf_len)
+static int account_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_account account = {
 		.odata_id = "/redfish/v1/AccountService/Accounts/1",
@@ -709,8 +718,8 @@ static int account_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(account_descr, ARRAY_SIZE(account_descr),
-				  &account, out_buf, out_buf_len);
+	ret = json_obj_encode(account_descr, ARRAY_SIZE(account_descr),
+				&account, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode account: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -725,7 +734,7 @@ REDFISH_HANDLER(account, "/redfish/v1/AccountService/Accounts/1",
 
 /*** /redfish/v1/Managers ***/
 /* GET /redfish/v1/Managers */
-static int managers_collection_get_handler(char *out_buf, size_t out_buf_len)
+static int managers_collection_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_collection managers_collection = {
 		.odata_id = "/redfish/v1/Managers",
@@ -741,8 +750,8 @@ static int managers_collection_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
-				  &managers_collection, out_buf, out_buf_len);
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+				&managers_collection, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode managers collection: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -789,12 +798,13 @@ static const char *get_iso_time(void)
 }
 
 /* PATCH /redfish/v1/Managers/bmc */
-static int manager_patch_handler(char *in_buf, size_t in_buf_len)
+static int manager_patch_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_manager payload;
 	int ret;
 
-	ret = json_obj_parse(in_buf, in_buf_len, manager_descr, ARRAY_SIZE(manager_descr), &payload);
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     manager_descr, ARRAY_SIZE(manager_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("Manager: Bad JSON (err=%d)", ret);
 		return HTTP_400_BAD_REQUEST;
@@ -812,7 +822,7 @@ static int manager_patch_handler(char *in_buf, size_t in_buf_len)
 }
 
 /* GET /redfish/v1/Managers/bmc */
-static int manager_get_handler(char *out_buf, size_t out_buf_len)
+static int manager_get_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_manager manager = {
 		.odata_id = "/redfish/v1/Managers/bmc",
@@ -832,8 +842,8 @@ static int manager_get_handler(char *out_buf, size_t out_buf_len)
 		LOG_ERR("Failed to get BMC UUID: %d", ret);
 	}
 
-	ret = json_obj_encode_buf(manager_descr, ARRAY_SIZE(manager_descr),
-				  &manager, out_buf, out_buf_len);
+	ret = json_obj_encode(manager_descr, ARRAY_SIZE(manager_descr),
+				&manager, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode manager: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -848,7 +858,7 @@ REDFISH_HANDLER(manager, "/redfish/v1/Managers/bmc",
 
 /*** /redfish/v1/Managers/bmc/EthernetInterfaces ***/
 /* GET /redfish/v1/Managers/bmc/EthernetInterfaces */
-static int ethernet_collection_get_handler(char *out_buf, size_t out_buf_len)
+static int ethernet_collection_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_collection ethernet_collection = {
 		.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
@@ -864,8 +874,8 @@ static int ethernet_collection_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
-				  &ethernet_collection, out_buf, out_buf_len);
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+				&ethernet_collection, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode ethernet interfaces collection: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -928,7 +938,7 @@ static const struct json_obj_descr ethernet_interface_descr[] = {
 };
 
 /* PATCH /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
-static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
+static int ethernet_patch_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_ethernet_interface payload;
 	int ret;
@@ -936,7 +946,8 @@ static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 	memset(&payload, 0, sizeof(payload));
 	payload.dhcp_v4.dhcp_enabled = 0xff; /* sentinel */
 	payload.ipv4_static_count = -1;
-	ret = json_obj_parse(in_buf, in_buf_len, ethernet_interface_descr,
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     ethernet_interface_descr,
 			     ARRAY_SIZE(ethernet_interface_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("eth0: Bad JSON (err=%d)", ret);
@@ -981,7 +992,7 @@ static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 }
 
 /* GET /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 */
-static int ethernet_get_handler(char *out_buf, size_t out_buf_len)
+static int ethernet_get_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_ethernet_interface ethernet_interface = {
 		.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
@@ -1066,8 +1077,8 @@ static int ethernet_get_handler(char *out_buf, size_t out_buf_len)
 		redfish_static_addr->gateway = static_gw_str;
 	}
 
-	ret = json_obj_encode_buf(ethernet_interface_descr, ARRAY_SIZE(ethernet_interface_descr),
-				  &ethernet_interface, out_buf, out_buf_len);
+	ret = json_obj_encode(ethernet_interface_descr, ARRAY_SIZE(ethernet_interface_descr),
+				&ethernet_interface, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode ethernet interface: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1104,7 +1115,7 @@ static const struct json_obj_descr network_protocol_descr[] = {
 };
 
 /* PATCH /redfish/v1/Managers/bmc/NetworkProtocol */
-static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
+static int network_protocol_patch_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_network_protocol payload;
 	int ret;
@@ -1113,8 +1124,9 @@ static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
 	payload.ntp.protocol_enabled = 0xff; /* sentinel */
 	payload.ntp.ntp_servers_count = -1;
 
-	ret = json_obj_parse(in_buf, in_buf_len,
-			     network_protocol_descr, ARRAY_SIZE(network_protocol_descr), &payload);
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     network_protocol_descr,
+			     ARRAY_SIZE(network_protocol_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("NetworkProtocol: Bad JSON (err=%d)", ret);
 		return HTTP_400_BAD_REQUEST;
@@ -1136,7 +1148,7 @@ static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
 }
 
 /* GET /redfish/v1/Managers/bmc/NetworkProtocol */
-static int network_protocol_get_handler(char *out_buf, size_t out_buf_len)
+static int network_protocol_get_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_network_protocol network_protocol = {
 		.odata_type = "#ManagerNetworkProtocol.v1_9_0.ManagerNetworkProtocol",
@@ -1152,8 +1164,8 @@ static int network_protocol_get_handler(char *out_buf, size_t out_buf_len)
 		network_protocol.ntp.ntp_servers_count = 1;
 	}
 
-	ret = json_obj_encode_buf(network_protocol_descr, ARRAY_SIZE(network_protocol_descr),
-				  &network_protocol, out_buf, out_buf_len);
+	ret = json_obj_encode(network_protocol_descr, ARRAY_SIZE(network_protocol_descr),
+				&network_protocol, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode network protocol: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1168,7 +1180,7 @@ REDFISH_HANDLER(network_protocol, "/redfish/v1/Managers/bmc/NetworkProtocol",
 
 /*** /redfish/v1/Systems ***/
 /* GET /redfish/v1/Systems */
-static int systems_collection_get_handler(char *out_buf, size_t out_buf_len)
+static int systems_collection_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_collection systems_collection = {
 		.odata_id = "/redfish/v1/Systems",
@@ -1184,8 +1196,8 @@ static int systems_collection_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
-				  &systems_collection, out_buf, out_buf_len);
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+				&systems_collection, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode systems collection: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1292,13 +1304,14 @@ static const struct json_obj_descr computer_system_descr[] = {
 };
 
 /* PATCH /redfish/v1/Systems/system */
-static int system_patch_handler(char *in_buf, size_t in_buf_len)
+static int system_patch_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_computer_system payload;
 	int ret;
 
 	memset(&payload, 0, sizeof(payload));
-	ret = json_obj_parse(in_buf, in_buf_len, computer_system_descr,
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     computer_system_descr,
 			     ARRAY_SIZE(computer_system_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("System: Bad JSON (err=%d)", ret);
@@ -1324,7 +1337,7 @@ static int system_patch_handler(char *in_buf, size_t in_buf_len)
 }
 
 /* GET /redfish/v1/Systems/system */
-static int system_get_handler(char *out_buf, size_t out_buf_len)
+static int system_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_computer_system computer_system = {
 		.odata_id = "/redfish/v1/Systems/system",
@@ -1359,8 +1372,8 @@ static int system_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(computer_system_descr, ARRAY_SIZE(computer_system_descr),
-				       &computer_system, out_buf, out_buf_len);
+	ret = json_obj_encode(computer_system_descr, ARRAY_SIZE(computer_system_descr),
+				&computer_system, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode computer system: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1382,13 +1395,14 @@ static const struct json_obj_descr reset_descr[] = {
 };
 
 /* POST /redfish/v1/Systems/system/Actions/ComputerSystem.Reset */
-static int system_reset_post_handler(char *in_buf, size_t in_buf_len)
+static int system_reset_post_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_reset_payload payload;
 	int ret;
 
 	memset(&payload, 0, sizeof(payload));
-	ret = json_obj_parse(in_buf, in_buf_len, reset_descr, ARRAY_SIZE(reset_descr), &payload);
+	ret = json_obj_parse(user_data->data_buffer, user_data->data_len,
+			     reset_descr, ARRAY_SIZE(reset_descr), &payload);
 	if (ret < 0) {
 		LOG_ERR("ComputerSystem.Reset: Bad JSON (err=%d)", ret);
 		return HTTP_400_BAD_REQUEST;
