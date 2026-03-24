@@ -362,9 +362,16 @@ static int redfish_version_get_handler(char *out_buf, size_t out_buf_len)
 	const struct redfish_version version = {
 		.v1 = "/redfish/v1/"
 	};
+	int ret;
 
-	return json_obj_encode_buf(version_descr, ARRAY_SIZE(version_descr),
-				   &version, out_buf, out_buf_len);
+	ret = json_obj_encode_buf(version_descr, ARRAY_SIZE(version_descr),
+				  &version, out_buf, out_buf_len);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode redfish/v1/: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
 }
 
 REDFISH_HANDLER(redfish_version, "/redfish/",
