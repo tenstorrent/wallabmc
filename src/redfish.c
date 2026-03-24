@@ -246,9 +246,12 @@ static int redfish_handler(struct http_client_ctx *client,
 			response_ctx->status = HTTP_204_NO_CONTENT; /* 204 is success */
 
 	} else if (client->method == HTTP_GET && get_fn) {
-		/* No support for accumulating GET requests (they should be small) */
-		if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
+		if (status != HTTP_SERVER_REQUEST_DATA_FINAL) {
+			/* No support for accumulating GET requests (they should be small) */
+			response_ctx->status = HTTP_400_BAD_REQUEST;
+			response_ctx->final_chunk = true;
 			return 0;
+		}
 
 		ret = get_fn(out_buffer, sizeof(out_buffer));
 		if (ret) {
