@@ -818,7 +818,7 @@ REDFISH_HANDLER(ethernet_interfaces, "/redfish/v1/Managers/bmc/EthernetInterface
 /*** /redfish/v1/Managers/bmc/EthernetInterfaces/eth0 ***/
 /* DHCPv4 */
 struct redfish_dhcp_v4 {
-	bool dhcp_enabled;
+	uint8_t dhcp_enabled;
 };
 static const struct json_obj_descr dhcp_v4_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_dhcp_v4, "DHCPEnabled", dhcp_enabled, JSON_TOK_TRUE),
@@ -869,10 +869,9 @@ static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 {
 	struct redfish_ethernet_interface payload;
 	int ret;
-	bool poison_bool;
 
 	memset(&payload, 0, sizeof(payload));
-	memset(&payload.dhcp_v4.dhcp_enabled, 0xe1, sizeof(bool)); /* poison */
+	payload.dhcp_v4.dhcp_enabled = 0xff; /* sentinel */
 	payload.ipv4_static_count = -1;
 	ret = json_obj_parse(in_buf, in_buf_len, ethernet_interface_descr,
 			     ARRAY_SIZE(ethernet_interface_descr), &payload);
@@ -889,8 +888,7 @@ static int ethernet_patch_handler(char *in_buf, size_t in_buf_len)
 		}
 	}
 
-	memset(&poison_bool, 0xe1, sizeof(poison_bool));
-	if (memcmp(&payload.dhcp_v4.dhcp_enabled, &poison_bool, sizeof(bool)))
+	if (payload.dhcp_v4.dhcp_enabled != 0xff)
 		config_bmc_use_dhcp4_set(payload.dhcp_v4.dhcp_enabled);
 
 	if (payload.ipv4_static_count != -1) {
@@ -1021,7 +1019,7 @@ REDFISH_HANDLER(ethernet, "/redfish/v1/Managers/bmc/EthernetInterfaces/eth0",
 
 /*** /redfish/v1/Managers/bmc/NetworkProtocol ***/
 struct redfish_ntp {
-	bool protocol_enabled;
+	uint8_t protocol_enabled;
 	const char *ntp_servers[1];
 	size_t ntp_servers_count;
 };
@@ -1047,11 +1045,11 @@ static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
 {
 	struct redfish_network_protocol payload;
 	int ret;
-	bool poison_bool;
 
 	memset(&payload, 0, sizeof(payload));
-	memset(&payload.ntp.protocol_enabled, 0xe1, sizeof(bool)); /* poison */
+	payload.ntp.protocol_enabled = 0xff; /* sentinel */
 	payload.ntp.ntp_servers_count = -1;
+
 	ret = json_obj_parse(in_buf, in_buf_len,
 			     network_protocol_descr, ARRAY_SIZE(network_protocol_descr), &payload);
 	if (ret < 0) {
@@ -1068,8 +1066,7 @@ static int network_protocol_patch_handler(char *in_buf, size_t in_buf_len)
 		}
 	}
 
-	memset(&poison_bool, 0xe1, sizeof(poison_bool));
-	if (memcmp(&payload.ntp.protocol_enabled, &poison_bool, sizeof(bool)))
+	if (payload.ntp.protocol_enabled != 0xff)
 		config_bmc_use_ntp_set(payload.ntp.protocol_enabled);
 
 	return 0;
