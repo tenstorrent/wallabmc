@@ -31,12 +31,6 @@
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 
-/* This is racy because several requests could be concurrently processing */
-/* XXX: must fix and make these per-client */
-static char out_buffer[1024];
-static char in_buffer[512];
-static size_t in_buffer_len;
-
 /*** Redfish HTTP handlers ***/
 
 /* "Basic" (not session based) authentication, uses HTTP Authorization header */
@@ -181,21 +175,79 @@ static void set_unauth_response(struct http_client_ctx *client,
 	ctx->body_len = 0;
 }
 
+struct http_resource_user_data {
+	bool started;
+	size_t size;
+	size_t data_len;
+	uint8_t *data_buffer;
+};
+
+#define USER_DATA_HEAP_SIZE		2048
+#define USER_DATA_BUFFER_GET_SIZE	1024
+#define USER_DATA_BUFFER_POST_SIZE	512
+
+static K_HEAP_DEFINE(heap_data_buffer, USER_DATA_HEAP_SIZE);
+
+static void alloc_user_data(struct http_resource_user_data *user_data, size_t size)
+{
+	user_data->started = true;
+	user_data->size = size;
+	user_data->data_buffer = k_heap_alloc(&heap_data_buffer, size, K_FOREVER);
+}
+
+static void free_user_data(struct http_resource_user_data *user_data)
+{
+	if (!user_data->started)
+		return;
+
+	user_data->started = false;
+	user_data->size = 0;
+	user_data->data_len = 0;
+	k_heap_free(&heap_data_buffer, user_data->data_buffer);
+	user_data->data_buffer = NULL;
+}
+
+static bool append_user_data(struct http_resource_user_data *user_data, const void *src, size_t size)
+{
+	if (user_data->data_len + size > user_data->size) {
+		LOG_WRN("HTTP user_data buffer out of space size=%zu < %zu",
+			user_data->size, user_data->data_len + size);
+		return false;
+	}
+
+	memcpy(user_data->data_buffer + user_data->data_len, src, size);
+	user_data->data_len += size;
+
+	return true;
+}
+
 static int redfish_handler(struct http_client_ctx *client,
 			   enum http_transaction_status status,
 			   const struct http_request_ctx *request_ctx,
 			   struct http_response_ctx *response_ctx,
-			   void *user_data,
+			   struct http_resource_user_data *user_data,
 			   bool require_auth,
 			   int (*get_fn)(char *out_buf, size_t out_buf_len),
 			   int (*patch_fn)(char *in_buf, size_t in_buf_len),
 			   int (*post_fn)(char *in_buf, size_t in_buf_len))
 {
-	int ret;
 	uint32_t allow_methods = 0;
+	int ret;
+
+	if (status == HTTP_SERVER_TRANSACTION_COMPLETE) {
+		if (client->method == HTTP_GET) {
+			free_user_data(user_data);
+		} else {
+			if (user_data->started) {
+				LOG_ERR("user_data not cleared before transaction complete");
+				free_user_data(user_data);
+			}
+		}
+		return 0;
+	}
 
 	if (status == HTTP_SERVER_TRANSACTION_ABORTED) {
-		in_buffer_len = 0;
+		free_user_data(user_data);
 		return 0;
 	}
 
@@ -216,14 +268,14 @@ static int redfish_handler(struct http_client_ctx *client,
 	}
 
 	if (client->method == HTTP_PATCH || client->method == HTTP_POST) {
+		if (!user_data->started)
+			alloc_user_data(user_data, USER_DATA_BUFFER_POST_SIZE);
+
 		/* Accumulate requests into the in_buffer, until the final request. */
 		if (request_ctx->data && request_ctx->data_len > 0) {
-			if (in_buffer_len + request_ctx->data_len < sizeof(in_buffer)) {
-				memcpy(in_buffer + in_buffer_len, request_ctx->data, request_ctx->data_len);
-				in_buffer_len += request_ctx->data_len;
-			} else {
+			if (!append_user_data(user_data, request_ctx->data, request_ctx->data_len)) {
 				LOG_ERR("Payload too large");
-				in_buffer_len = 0;
+				free_user_data(user_data);
 				response_ctx->status = HTTP_400_BAD_REQUEST;
 				response_ctx->final_chunk = true;
 				return 0;
@@ -233,19 +285,22 @@ static int redfish_handler(struct http_client_ctx *client,
 		if (status != HTTP_SERVER_REQUEST_DATA_FINAL)
 			return 0;
 
-		in_buffer[in_buffer_len] = '\0';
-
 		if (client->method == HTTP_PATCH)
-			ret = patch_fn(in_buffer, in_buffer_len);
+			ret = patch_fn(user_data->data_buffer, user_data->data_len);
 		else /* client->method == HTTP_POST */
-			ret = post_fn(in_buffer, in_buffer_len);
-		in_buffer_len = 0;
+			ret = post_fn(user_data->data_buffer, user_data->data_len);
+		free_user_data(user_data);
 		if (ret)
 			response_ctx->status = ret;
 		else
 			response_ctx->status = HTTP_204_NO_CONTENT; /* 204 is success */
 
 	} else if (client->method == HTTP_GET && get_fn) {
+		if (user_data->started) {
+			LOG_ERR("HTTP_GET has started user data");
+			free_user_data(user_data);
+		}
+
 		if (status != HTTP_SERVER_REQUEST_DATA_FINAL) {
 			/* No support for accumulating GET requests (they should be small) */
 			response_ctx->status = HTTP_400_BAD_REQUEST;
@@ -253,12 +308,14 @@ static int redfish_handler(struct http_client_ctx *client,
 			return 0;
 		}
 
-		ret = get_fn(out_buffer, sizeof(out_buffer));
+		alloc_user_data(user_data, USER_DATA_BUFFER_GET_SIZE);
+
+		ret = get_fn(user_data->data_buffer, user_data->size);
 		if (ret) {
 			response_ctx->status = ret;
 		} else {
-			response_ctx->body = (uint8_t *)out_buffer;
-			response_ctx->body_len = strlen(out_buffer);
+			response_ctx->body = user_data->data_buffer;
+			response_ctx->body_len = strlen(user_data->data_buffer);
 			response_ctx->status = HTTP_200_OK;
 		}
 	} else {
@@ -280,13 +337,16 @@ HTTP_RESOURCE_DEFINE(name##_http, http_service, url, detail);
 #endif
 
 #define REDFISH_HANDLER(name, url, require_auth, get_handler, patch_handler, post_handler) \
+/* Zephyr HTTP API serialises requests by resource so static data can be used here. */	\
+static struct http_resource_user_data name##_user_data;					\
 static int name##_handler(struct http_client_ctx *client,				\
 			  enum http_transaction_status status,				\
 			  const struct http_request_ctx *request_ctx,			\
 			  struct http_response_ctx *response_ctx,			\
 			  void *user_data)						\
 {											\
-	return redfish_handler(client, status, request_ctx, response_ctx, user_data,	\
+	return redfish_handler(client, status, request_ctx, response_ctx,		\
+				user_data,						\
 				require_auth,						\
 				get_handler,						\
 				patch_handler,						\
@@ -298,7 +358,7 @@ static const struct http_resource_detail_dynamic name##_detail = {			\
 		.bitmask_of_supported_http_methods = -1U,				\
 	},										\
 	.cb = name##_handler,								\
-	.user_data = NULL,								\
+	.user_data = &name##_user_data,							\
 };											\
 ALL_HTTP_RESOURCE_DEFINE(name, url, &name##_detail);
 
