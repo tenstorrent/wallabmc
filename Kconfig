@@ -350,6 +350,14 @@ config PERSISTENT_STORAGE
 	select NVS
 	select NVS_INIT_BAD_MEMORY_REGION # Do not require erased flash
 
+config REBOOT
+	bool
+	default y
+
+config POWEROFF
+	bool
+	default y if HAS_POWEROFF
+
 config JTAG
 	bool "JTAG support"
 	depends on $(dt_path_enabled,/jtag)
