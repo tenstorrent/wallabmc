@@ -1617,7 +1617,7 @@ REDFISH_HANDLER(chassis, "/redfish/v1/Chassis/1",
 #endif
 
 /* GET /redfish/v1/Chassis/1/Sensors */
-static int sensors_collection_get_handler(char *out_buf, size_t out_buf_len)
+static int sensors_collection_get_handler(struct http_resource_user_data *user_data)
 {
 	const struct redfish_collection sensors_collection = {
 		.odata_id = "/redfish/v1/Chassis/1/Sensors",
@@ -1637,8 +1637,8 @@ static int sensors_collection_get_handler(char *out_buf, size_t out_buf_len)
 	};
 	int ret;
 
-	ret = json_obj_encode_buf(collection_descr, ARRAY_SIZE(collection_descr),
-				  &sensors_collection, out_buf, out_buf_len);
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+			      &sensors_collection, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode sensors collection: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
@@ -1684,7 +1684,7 @@ static const struct json_obj_descr sensor_descr[] = {
 };
 
 /* GET /redfish/v1/Chassis/1/Sensors/TempBmc */
-static int sensor_temp_bmc_get_handler(char *out_buf, size_t out_buf_len)
+static int sensor_temp_bmc_get_handler(struct http_resource_user_data *user_data)
 {
 	struct redfish_sensor sensor_temp_bmc = {
 		.odata_id = "/redfish/v1/Chassis/1/Sensors/TempBmc",
@@ -1708,8 +1708,8 @@ static int sensor_temp_bmc_get_handler(char *out_buf, size_t out_buf_len)
 		sensor_temp_bmc.reading = val.val1;
 	}
 
-	ret = json_obj_encode_buf(sensor_descr, ARRAY_SIZE(sensor_descr),
-				       &sensor_temp_bmc, out_buf, out_buf_len);
+	ret = json_obj_encode(sensor_descr, ARRAY_SIZE(sensor_descr),
+			      &sensor_temp_bmc, user_data_json_append, user_data);
 	if (ret < 0) {
 		LOG_ERR("Failed to encode Sensor TempBmc: %d", ret);
 		return HTTP_500_INTERNAL_SERVER_ERROR;
