@@ -19,6 +19,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "http.h"
 #include "power.h"
 #include "rtc.h"
+#include "sensors.h"
 #include "jtag.h"
 #include "console_logger.h"
 #include "console_bridge.h"
