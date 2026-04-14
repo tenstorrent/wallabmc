@@ -64,7 +64,7 @@ int rtc_set_from_clock(void)
 
 static int time_iso_to_ts(const char *str, struct timespec *ts)
 {
-	static struct tm tm;
+	struct tm tm;
 	int year, month, day, hour, minute, second, frac, ms;
 	time_t epoch_sec;
 	int ret;
