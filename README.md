@@ -29,6 +29,12 @@ WallaBMC currently supports the following hardware platforms:
 | **STM32 Nucleo F767ZI** | nucleo_f767zi | ARM Cortex-M7 development board (standalone, no host CPU) |
 | **qemu** | qemu_cortex_m3 | see [run_qemu_ci.py](scripts/run_qemu_ci.py) |
 
+### Screenshot
+
+The current web interface is shown below, click to enlarge.
+
+[![Web UI screenshot](img/web-ui-thumbnail.png)](img/web-ui.png)
+
 ## Using
 
 ### Prerequisites
