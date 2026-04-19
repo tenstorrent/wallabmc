@@ -316,6 +316,18 @@
 			opacity: 0.6;
 		}
 		.term-resize-corner:hover { opacity: 1; }
+		.term-font-controls {
+			display: flex; align-items: center; gap: 6px; margin: 0 12px;
+		}
+		.term-font-controls select, .term-font-controls input {
+			background: #374151; color: #e5e7eb; border: 1px solid #4b5563;
+			border-radius: 4px; font-size: 11px; height: auto; width: auto;
+			padding: 2px 4px;
+		}
+		.term-font-controls select:focus, .term-font-controls input:focus {
+			border-color: #6b7280; outline: none; box-shadow: none;
+		}
+		.term-font-controls input[type=number] { width: 44px; }
 		.term-body { flex: 1; min-height: 0; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
 
 		/* Sidebar layout */
@@ -414,6 +426,10 @@
 						<div class="term-window">
 							<div class="term-header">
 								<span>Host Serial Console</span>
+								<div class="term-font-controls">
+									<select class="term-font-select" onchange="applyTermFont(this)"></select>
+									<input type="number" class="term-font-size" min="8" max="32" step="1" onchange="applyTermFont(this)">
+								</div>
 							</div>
 							<div id="host-terminal-container" class="term-body"></div>
 							<div class="term-resize-corner" onmousedown="startTermResize(event, this.closest('.term-window'))"></div>
@@ -424,6 +440,10 @@
 						<div class="term-window">
 							<div class="term-header">
 								<span>BMC Shell</span>
+								<div class="term-font-controls">
+									<select class="term-font-select" onchange="applyTermFont(this)"></select>
+									<input type="number" class="term-font-size" min="8" max="32" step="1" onchange="applyTermFont(this)">
+								</div>
 							</div>
 							<div id="bmc-terminal-container" class="term-body"></div>
 							<div class="term-resize-corner" onmousedown="startTermResize(event, this.closest('.term-window'))"></div>
@@ -1090,6 +1110,75 @@
 			if (name === 'bmc-shell' && bmcWsConsole) bmcWsConsole.term.focus();
 		}
 
+		// --- Terminal font settings ---
+		const MONOSPACE_FONTS = [
+			'Andale Mono', 'Anonymous Pro', 'Cascadia Code', 'Consolas', 'Courier New',
+			'DejaVu Sans Mono', 'Droid Sans Mono', 'Fira Code', 'Hack', 'IBM Plex Mono',
+			'Inconsolata', 'Input Mono', 'JetBrains Mono', 'Lucida Console', 'Menlo',
+			'Monaco', 'Noto Mono', 'Oxygen Mono', 'Roboto Mono', 'SF Mono', 'Source Code Pro',
+			'Ubuntu Mono',
+		];
+
+		function detectAvailableFonts(candidates) {
+			const canvas = document.createElement('canvas');
+			const ctx = canvas.getContext('2d');
+			const testStr = 'mmmmmmmmmmlli';
+			const fallbackWidths = new Set(['serif', 'sans-serif', 'monospace'].map(fb => {
+				ctx.font = `16px ${fb}`;
+				return ctx.measureText(testStr).width;
+			}));
+			return candidates.filter(font => {
+				ctx.font = `16px "${font}"`;
+				return !fallbackWidths.has(ctx.measureText(testStr).width);
+			});
+		}
+
+		const availableFonts = detectAvailableFonts(MONOSPACE_FONTS);
+		const TERM_FONT_SIZE_MIN = 8;
+		const TERM_FONT_SIZE_MAX = 32;
+		const TERM_FONT_SIZE_DEFAULT = 14;
+
+		function normalizeTermFontSize(value) {
+			const parsed = parseInt(value, 10);
+			if (!Number.isFinite(parsed)) {
+				return TERM_FONT_SIZE_DEFAULT;
+			}
+			return Math.min(TERM_FONT_SIZE_MAX, Math.max(TERM_FONT_SIZE_MIN, parsed));
+		}
+
+		function populateFontSelects() {
+			const savedFont = localStorage.getItem('term-font-family') || 'monospace';
+			const savedSize = normalizeTermFontSize(localStorage.getItem('term-font-size'));
+			document.querySelectorAll('.term-font-select').forEach(sel => {
+				sel.innerHTML = '<option value="monospace">System monospace</option>';
+				availableFonts.forEach(font => {
+					const opt = document.createElement('option');
+					opt.value = font;
+					opt.textContent = font;
+					sel.appendChild(opt);
+				});
+				sel.value = savedFont;
+			});
+			document.querySelectorAll('.term-font-size').forEach(el => el.value = savedSize);
+		}
+
+		function applyTermFont(changed) {
+			const group = changed.closest('.term-font-controls');
+			const fontFamily = group.querySelector('.term-font-select').value;
+			const fontSize   = normalizeTermFontSize(group.querySelector('.term-font-size').value);
+			// Keep all controls in sync
+			document.querySelectorAll('.term-font-select').forEach(s => s.value = fontFamily);
+			document.querySelectorAll('.term-font-size').forEach(i => i.value = fontSize);
+			localStorage.setItem('term-font-family', fontFamily);
+			localStorage.setItem('term-font-size', fontSize);
+			[hostWsConsole, bmcWsConsole].forEach(c => {
+				if (!c) return;
+				c.term.options.fontFamily = fontFamily;
+				c.term.options.fontSize   = fontSize;
+				c.fitAddon.fit();
+			});
+		}
+
 		// --- Terminal Handling ---
 		function startTermResize(e, termWindow) {
 			e.preventDefault();
@@ -1108,6 +1197,14 @@
 		}
 
 		class WSConsole {
+			static getStoredFontSize() {
+				const storedFontSize = localStorage.getItem('term-font-size');
+				const parsedFontSize = Number.parseInt(storedFontSize ?? '', 10);
+				if (!Number.isFinite(parsedFontSize))
+					return TERM_FONT_SIZE_DEFAULT;
+				return Math.min(TERM_FONT_SIZE_MAX, Math.max(TERM_FONT_SIZE_MIN, parsedFontSize));
+			}
+
 			constructor(wsUrl, htmlContainer, nameString, promptString) {
 				this.term = new Terminal({
 						role: "server",
@@ -1115,6 +1212,8 @@
 						convertEol: true,
 						cursorBlink: true,
 						theme: { background: '#000000' },
+						fontFamily: localStorage.getItem('term-font-family') || 'monospace',
+						fontSize:   WSConsole.getStoredFontSize(),
 				});
 				this.fitAddon = new FitAddon.FitAddon();
 				this.term.loadAddon(this.fitAddon);
@@ -1194,6 +1293,8 @@
 				document.getElementById('bmc-terminal-container').innerHTML = '';
 			}
 		}
+
+		populateFontSelects();
 	</script>
 </body>
 </html>
