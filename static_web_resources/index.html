@@ -294,14 +294,29 @@
 			box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 			overflow: hidden; border: 1px solid #374151;
 			margin-bottom: 24px;
+			display: flex; flex-direction: column;
+			height: 550px; min-height: 200px; min-width: 400px;
+			position: relative;
 		}
 		.term-header {
 			display: flex; justify-content: space-between; align-items: center;
 			padding: 15px 15px; background: #1f2937; color: #e5e7eb;
 			font-family: monospace; font-size: 14px;
 			border-bottom: 1px solid #374151;
+			flex-shrink: 0;
 		}
-		.term-body { height: 500px; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
+		.term-resize-corner {
+			position: absolute; bottom: 0; right: 0;
+			width: 24px; height: 24px; cursor: se-resize; z-index: 10;
+			background: repeating-linear-gradient(
+				-45deg,
+				transparent, transparent 3px,
+				#6b7280 3px, #6b7280 4.5px
+			);
+			opacity: 0.6;
+		}
+		.term-resize-corner:hover { opacity: 1; }
+		.term-body { flex: 1; min-height: 0; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
 
 		/* Sidebar layout */
 		.dashboard-layout {
@@ -401,6 +416,7 @@
 								<span>Host Serial Console</span>
 							</div>
 							<div id="host-terminal-container" class="term-body"></div>
+							<div class="term-resize-corner" onmousedown="startTermResize(event, this.closest('.term-window'))"></div>
 						</div>
 					</div>
 
@@ -410,6 +426,7 @@
 								<span>BMC Shell</span>
 							</div>
 							<div id="bmc-terminal-container" class="term-body"></div>
+							<div class="term-resize-corner" onmousedown="startTermResize(event, this.closest('.term-window'))"></div>
 						</div>
 					</div>
 
@@ -1074,6 +1091,22 @@
 		}
 
 		// --- Terminal Handling ---
+		function startTermResize(e, termWindow) {
+			e.preventDefault();
+			const startX = e.clientX, startY = e.clientY;
+			const startW = termWindow.offsetWidth, startH = termWindow.offsetHeight;
+			function onMouseMove(e) {
+				termWindow.style.width  = Math.max(400, startW + e.clientX - startX) + 'px';
+				termWindow.style.height = Math.max(200, startH + e.clientY - startY) + 'px';
+			}
+			function onMouseUp() {
+				document.removeEventListener('mousemove', onMouseMove);
+				document.removeEventListener('mouseup', onMouseUp);
+			}
+			document.addEventListener('mousemove', onMouseMove);
+			document.addEventListener('mouseup', onMouseUp);
+		}
+
 		class WSConsole {
 			constructor(wsUrl, htmlContainer, nameString, promptString) {
 				this.term = new Terminal({
@@ -1088,6 +1121,18 @@
 
 				this.term.open(htmlContainer);
 				this.fitAddon.fit();
+
+				// Refit whenever the surrounding terminal window is resized.
+				const termWindow = htmlContainer.closest('.term-window');
+				if (termWindow) {
+					if (window.ResizeObserver) {
+						this.resizeObserver = new ResizeObserver(() => this.fitAddon.fit());
+						this.resizeObserver.observe(termWindow);
+					} else {
+						this.windowResizeHandler = () => this.fitAddon.fit();
+						window.addEventListener('resize', this.windowResizeHandler);
+					}
+				}
 
 				this.term.write(`Connecting to ${nameString}...`);
 
@@ -1123,6 +1168,10 @@
 		function closeTerminal(host) {
 			if (host) {
 				if (hostWsConsole) {
+					if (hostWsConsole.resizeObserver)
+						hostWsConsole.resizeObserver.disconnect();
+					if (hostWsConsole.windowResizeHandler)
+						window.removeEventListener('resize', hostWsConsole.windowResizeHandler);
 					if (hostWsConsole.ws)
 						hostWsConsole.ws.close()
 					if (hostWsConsole.term)
@@ -1132,6 +1181,10 @@
 				document.getElementById('host-terminal-container').innerHTML = '';
 			} else {
 				if (bmcWsConsole) {
+					if (bmcWsConsole.resizeObserver)
+						bmcWsConsole.resizeObserver.disconnect();
+					if (bmcWsConsole.windowResizeHandler)
+						window.removeEventListener('resize', bmcWsConsole.windowResizeHandler);
 					if (bmcWsConsole.ws)
 						bmcWsConsole.ws.close()
 					if (bmcWsConsole.term)
