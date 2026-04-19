@@ -288,18 +288,12 @@
 			font-weight: bold;
 		}
 
-		/* Terminal Modal */
-		.modal-overlay {
-			position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-			background: rgba(0, 0, 0, 0.6);
-			display: flex; justify-content: center; align-items: center;
-			z-index: 1000; backdrop-filter: blur(2px);
-		}
+		/* Terminal */
 		.term-window {
-			background: #111827; padding: 0; border-radius: 8px;
-			box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-			width: 90%; max-width: 960px; overflow: hidden;
-			border: 1px solid #374151;
+			background: #111827; padding: 0; border-radius: var(--radius);
+			box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+			overflow: hidden; border: 1px solid #374151;
+			margin-bottom: 24px;
 		}
 		.term-header {
 			display: flex; justify-content: space-between; align-items: center;
@@ -312,7 +306,38 @@
 			padding: 0 5px; margin-left: 10px; width: auto; border: none;
 		}
 		.term-controls button:hover { color: white; background: transparent; }
-		#terminal-container { height: 500px; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
+		.term-body { height: 500px; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
+
+		/* Sidebar layout */
+		.dashboard-layout {
+			display: flex;
+			gap: 24px;
+			align-items: flex-start;
+		}
+		.sidebar {
+			width: 180px;
+			flex-shrink: 0;
+			background: var(--card-bg);
+			border-radius: var(--radius);
+			border: 1px solid var(--border);
+			box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+			overflow: hidden;
+			position: sticky;
+			top: 20px;
+		}
+		.sidebar-item {
+			display: block;
+			padding: 10px 16px;
+			color: var(--text-main);
+			text-decoration: none;
+			font-size: 0.875rem;
+			border-bottom: 1px solid var(--border);
+		}
+		.sidebar-item:last-child { border-bottom: none; }
+		.sidebar-item:hover { background: var(--bg); color: var(--text-main); }
+		.sidebar-item.active { background: var(--primary); color: white; font-weight: 600; }
+		.sidebar-item.active:hover { background: var(--primary-hover); color: white; }
+		.dashboard-content { flex: 1; min-width: 0; }
 	</style>
 </head>
 <body>
@@ -340,187 +365,195 @@
 					<h1 style="font-size: 1.5rem; margin: 0; color: var(--dark);">WallaBMC Admin Dashboard</h1>
 				</div>
 				<div class="nav-actions">
-					<button class="dark" onclick="openTerminal(true)">Host Console</button>
-					<button class="dark" onclick="openTerminal(false)">BMC Shell</button>
 					<button class="secondary" onclick="logout()">Logout</button>
 				</div>
 			</div>
 
-			<div class="card">
-				<div class="section-header-flex">
-					<h2>System Overview</h2>
-					<div class="uuid-display">
-						UUID: <span id="sys-uuid">Loading...</span>
-					</div>
-				</div>
+			<div class="dashboard-layout">
+				<nav class="sidebar">
+					<a class="sidebar-item active" data-section="system-overview" href="#" onclick="showSection('system-overview'); return false;">System Overview</a>
+					<a class="sidebar-item" data-section="power-control" href="#" onclick="showSection('power-control'); return false;">Host Power Control</a>
+					<a class="sidebar-item" data-section="host-console" href="#" onclick="showSection('host-console'); return false;">Host Console</a>
+					<a class="sidebar-item" data-section="bmc" href="#" onclick="showSection('bmc'); return false;">BMC Settings</a>
+					<a class="sidebar-item" data-section="bmc-shell" href="#" onclick="showSection('bmc-shell'); return false;">BMC Shell</a>
+					<a id="sidebar-sensors" class="sidebar-item hidden" data-section="sensors" href="#" onclick="showSection('sensors'); return false;">Sensors</a>
+				</nav>
+				<div class="dashboard-content">
 
-				<div class="grid-3-col">
-					<div class="info-item"><span class="info-item-label">Board</span><span class="data-value" id="sys-name">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Manufacturer</span><span class="data-value" id="sys-manufacturer">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Model</span><span class="data-value" id="sys-model">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Serial</span><span class="data-value" id="sys-serial">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">CPU</span><span class="data-value" id="sys-cpu-model">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">CPU Count</span><span class="data-value" id="sys-cpu">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Memory</span><span class="data-value" id="sys-memory">Loading...</span></div>
-				</div>
-			</div>
+					<div id="section-system-overview">
+						<div class="card">
+							<div class="section-header-flex">
+								<h2>System Overview</h2>
+								<div class="uuid-display">
+									UUID: <span id="sys-uuid">Loading...</span>
+								</div>
+							</div>
+							<div class="grid-3-col">
+								<div class="info-item"><span class="info-item-label">Board</span><span class="data-value" id="sys-name">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Manufacturer</span><span class="data-value" id="sys-manufacturer">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Model</span><span class="data-value" id="sys-model">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Serial</span><span class="data-value" id="sys-serial">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">CPU</span><span class="data-value" id="sys-cpu-model">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">CPU Count</span><span class="data-value" id="sys-cpu">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Memory</span><span class="data-value" id="sys-memory">Loading...</span></div>
+							</div>
+						</div>
+					</div>
 
-			<div class="card">
-				<h2>Host Power Control</h2>
-				<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-					<span class="info-item-label" style="font-weight: bold; color: var(--text-muted); font-size: 0.8rem;">CURRENT STATE:</span>
-					<span id="power-state-badge" class="badge">Unknown</span>
-				</div>
+					<div id="section-host-console" class="hidden">
+						<div class="term-window">
+							<div class="term-header">
+								<span>Host Serial Console</span>
+								<div class="term-controls">
+									<button onclick="closeTerminal(true); showSection('system-overview');" title="Disconnect">&times;</button>
+								</div>
+							</div>
+							<div id="host-terminal-container" class="term-body"></div>
+						</div>
+					</div>
 
-				<div class="controls-grid">
-					<button onclick="sendPowerAction('On')">Power On</button>
-					<button class="danger" onclick="sendPowerAction('ForceOff')">Force Off</button>
-					<button class="danger" onclick="sendPowerAction('ForceRestart')">Force Restart</button>
-				</div>
-			</div>
+					<div id="section-bmc-shell" class="hidden">
+						<div class="term-window">
+							<div class="term-header">
+								<span>BMC Shell</span>
+								<div class="term-controls">
+									<button onclick="closeTerminal(false); showSection('system-overview');" title="Disconnect">&times;</button>
+								</div>
+							</div>
+							<div id="bmc-terminal-container" class="term-body"></div>
+						</div>
+					</div>
 
-			<div class="card">
-				<div class="section-header-flex">
-					<h2>BMC</h2>
-					<div class="uuid-display">
-						UUID: <span id="bmc-uuid">Loading...</span>
+					<div id="section-power-control" class="hidden">
+						<div class="card">
+							<h2>Host Power Control</h2>
+							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+								<span class="info-item-label" style="font-weight: bold; color: var(--text-muted); font-size: 0.8rem;">CURRENT STATE:</span>
+								<span id="power-state-badge" class="badge">Unknown</span>
+							</div>
+							<div class="controls-grid">
+								<button onclick="sendPowerAction('On')">Power On</button>
+								<button class="danger" onclick="sendPowerAction('ForceOff')">Force Off</button>
+								<button class="danger" onclick="sendPowerAction('ForceRestart')">Force Restart</button>
+							</div>
+						</div>
 					</div>
-				</div>
 
-				<div class="grid-4-col" style="margin-bottom: 25px;">
-					<div class="info-item">
-						<span class="info-item-label">Name</span>
-						<span class="data-value" id="bmc-name">Loading...</span>
+					<div id="section-bmc" class="hidden">
+						<div class="card">
+							<div class="section-header-flex">
+								<h2>BMC Settings</h2>
+								<div class="uuid-display">
+									UUID: <span id="bmc-uuid">Loading...</span>
+								</div>
+							</div>
+							<div class="grid-4-col" style="margin-bottom: 25px;">
+								<div class="info-item">
+									<span class="info-item-label">Name</span>
+									<span class="data-value" id="bmc-name">Loading...</span>
+								</div>
+								<div class="info-item">
+									<span class="info-item-label">WallaBMC Version</span>
+									<span class="data-value" id="bmc-firmware-version">Loading...</span>
+								</div>
+								<div class="info-item">
+									<span class="info-item-label">Zephyr Version</span>
+									<span class="data-value" id="bmc-zephyr-version">Loading...</span>
+								</div>
+							</div>
+							<h3>Security</h3>
+							<div class="grid-4-col">
+								<div class="info-item">
+									<label for="cfg-password">New Password</label>
+									<input type="password" id="cfg-password" placeholder="Unchanged" title="Maximum 15 characters">
+									<small id="pwd-error" style="color: red; display: none;">Password must be 15 characters or fewer.</small>
+								</div>
+							</div>
+							<h3>Host Power Policy</h3>
+							<div class="grid-4-col">
+								<div class="info-item">
+									<label for="cfg-power-policy">Restore Policy</label>
+									<select id="cfg-power-policy">
+										<option value="AlwaysOff">Always Off</option>
+										<option value="AlwaysOn">Always On</option>
+									</select>
+								</div>
+							</div>
+							<h3>Time</h3>
+							<div class="grid-4-col">
+								<div class="info-item">
+									<span class="info-item-label">Current Time</span>
+									<span class="data-value" id="bmc-date-time">Loading...</span>
+								</div>
+								<div class="info-item">
+									<button onclick="syncTimeToBrowser()">Sync to browser</button>
+								</div>
+								<div class="info-item">
+									<label for="cfg-ntp">NTP</label>
+									<select id="cfg-ntp">
+										<option value="true">Enabled</option>
+										<option value="false">Disabled</option>
+									</select>
+								</div>
+								<div class="info-item">
+									<label for="cfg-ntp-server">NTP server</label>
+									<input type="text" id="cfg-ntp-server">
+								</div>
+							</div>
+							<h3>Network</h3>
+							<div class="grid-4-col">
+								<div class="info-item">
+									<label for="cfg-hostname">Hostname</label>
+									<input type="text" id="cfg-hostname" placeholder="New Hostname">
+								</div>
+								<div class="info-item"><span class="data-value"></span></div>
+								<div class="info-item"><span class="data-value"></span></div>
+								<div class="info-item"><span class="data-value"></span></div>
+								<div class="info-item"><span class="info-item-label">Address type</span><span class="data-value" id="bmc-address-type">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">IP Address</span><span class="data-value" id="bmc-ip-address">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Subnet Mask</span><span class="data-value" id="bmc-subnet">Loading...</span></div>
+								<div class="info-item"><span class="info-item-label">Gateway</span><span class="data-value" id="bmc-gateway">Loading...</span></div>
+								<div class="info-item">
+									<label for="cfg-dhcp">IP Assignment</label>
+									<select id="cfg-dhcp">
+										<option value="true">Prefer DHCP</option>
+										<option value="false">Static</option>
+									</select>
+								</div>
+								<div class="info-item">
+									<label for="cfg-static-ip">Static IP Address</label>
+									<input type="text" id="cfg-static-ip" placeholder="x.x.x.x">
+								</div>
+								<div class="info-item">
+									<label for="cfg-static-netmask">Static IP Subnet Mask</label>
+									<input type="text" id="cfg-static-netmask" placeholder="x.x.x.x">
+								</div>
+								<div class="info-item">
+									<label for="cfg-static-gateway">Static IP Gateway</label>
+									<input type="text" id="cfg-static-gateway" placeholder="x.x.x.x">
+								</div>
+							</div>
+							<div class="controls-grid">
+								<button class="danger" onclick="saveBmcConfig()">Apply Changes</button>
+								<button onclick="refreshConfigData()">Discard Changes</button>
+							</div>
+						</div>
 					</div>
-					<div class="info-item">
-						<span class="info-item-label">WallaBMC Version</span>
-						<span class="data-value" id="bmc-firmware-version">Loading...</span>
-					</div>
-					<div class="info-item">
-						<span class="info-item-label">Zephyr Version</span>
-						<span class="data-value" id="bmc-zephyr-version">Loading...</span>
-					</div>
-				</div>
 
-				<h3>Security</h3>
-				<div class="grid-4-col">
-					<div class="info-item">
-						<label for="cfg-password">New Password</label>
-						<input type="password" id="cfg-password" placeholder="Unchanged" title="Maximum 15 characters">
-						<small id="pwd-error" style="color: red; display: none;">Password must be 15 characters or fewer.</small>
+					<div id="section-sensors" class="hidden">
+						<div class="card">
+							<div class="section-header-flex">
+								<h2>Sensors</h2>
+							</div>
+							<h3>BMC SoC Temperature</h3>
+							<div class="chart-container">
+								<canvas id="tempChart"></canvas>
+							</div>
+							<div id="error-msg"></div>
+						</div>
 					</div>
-				</div>
 
-				<h3>Host Power Policy</h3>
-				<div class="grid-4-col">
-					<div class="info-item">
-						<label for="cfg-power-policy">Restore Policy</label>
-						<select id="cfg-power-policy">
-							<option value="AlwaysOff">Always Off</option>
-							<option value="AlwaysOn">Always On</option>
-						</select>
-					</div>
 				</div>
-
-				<h3>Time</h3>
-				<div class="grid-4-col">
-					<div class="info-item">
-						<span class="info-item-label">Current Time</span>
-						<span class="data-value" id="bmc-date-time">Loading...</span>
-					</div>
-					<div class="info-item">
-						<button onclick="syncTimeToBrowser()">Sync to browser</button>
-					</div>
-					<div class="info-item">
-						<label for="cfg-ntp">NTP</label>
-						<select id="cfg-ntp">
-							<option value="true">Enabled</option>
-							<option value="false">Disabled</option>
-						</select>
-					</div>
-					<div class="info-item">
-						<label for="cfg-ntp-server">NTP server</label>
-						<input type="text" id="cfg-ntp-server">
-					</div>
-				</div>
-
-				<h3>Network</h3>
-				<div class="grid-4-col">
-					<div class="info-item">
-						<label for="cfg-hostname">Hostname</label>
-						<input type="text" id="cfg-hostname" placeholder="New Hostname">
-					</div>
-					<div class="info-item"><span class="data-value"></span></div>
-					<div class="info-item"><span class="data-value"></span></div>
-					<div class="info-item"><span class="data-value"></span></div>
-
-					<div class="info-item"><span class="info-item-label">Address type</span><span class="data-value" id="bmc-address-type">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">IP Address</span><span class="data-value" id="bmc-ip-address">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Subnet Mask</span><span class="data-value" id="bmc-subnet">Loading...</span></div>
-					<div class="info-item"><span class="info-item-label">Gateway</span><span class="data-value" id="bmc-gateway">Loading...</span></div>
-
-					<div class="info-item">
-						<label for="cfg-dhcp">IP Assignment</label>
-						<select id="cfg-dhcp">
-							<option value="true">Prefer DHCP</option>
-							<option value="false">Static</option>
-						</select>
-					</div>
-					<div class="info-item">
-						<label for="cfg-static-ip">Static IP Address</label>
-						<input type="text" id="cfg-static-ip" placeholder="x.x.x.x">
-					</div>
-					<div class="info-item">
-						<label for="cfg-static-netmask">Static IP Subnet Mask</label>
-						<input type="text" id="cfg-static-netmask" placeholder="x.x.x.x">
-					</div>
-					<div class="info-item">
-						<label for="cfg-static-gateway">Static IP Gateway</label>
-						<input type="text" id="cfg-static-gateway" placeholder="x.x.x.x">
-					</div>
-				</div>
-
-				<div class="controls-grid">
-					<button class="danger" onclick="saveBmcConfig()">Apply Changes</button>
-					<button onclick="refreshConfigData()">Discard Changes</button>
-				</div>
-			</div>
-
-			<div id="sensors-card" class="card hidden">
-				<div class="section-header-flex">
-					<h2>Sensors</h2>
-				</div>
-				<h3>BMC SoC Temperature</h3>
-				<div class="chart-container">
-					<canvas id="tempChart"></canvas>
-				</div>
-				<div id="error-msg"></div>
-			</div>
-		</div>
-
-		<div id="host-term-modal" class="modal-overlay hidden">
-			<div class="term-window">
-				<div class="term-header">
-					<span>Host Serial Console</span>
-					<div class="term-controls">
-						<button onclick="hideTerminal(true)" title="Minimize">&minus;</button>
-						<button onclick="closeTerminal(true)" title="Close">&times;</button>
-					</div>
-				</div>
-				<div id="host-terminal-container"></div>
-			</div>
-		</div>
-
-		<div id="bmc-term-modal" class="modal-overlay hidden">
-			<div class="term-window">
-				<div class="term-header">
-					<span>BMC Shell</span>
-					<div class="term-controls">
-						<button onclick="hideTerminal(false)" title="Minimize">&minus;</button>
-						<button onclick="closeTerminal(false)" title="Close">&times;</button>
-					</div>
-				</div>
-				<div id="bmc-terminal-container"></div>
 			</div>
 		</div>
 	</div>
@@ -679,7 +712,7 @@
 
 				if (sensorTempIdPath) {
 					initSensors();
-					document.getElementById('sensors-card').classList.remove('hidden');
+					document.getElementById('sidebar-sensors').classList.remove('hidden');
 				} else {
 					console.log("No BMC temperature sensor found.");
 				}
@@ -713,6 +746,9 @@
 			sensorsTimer = null;
 			closeTerminal(true);
 			closeTerminal(false);
+
+			document.getElementById('sidebar-sensors').classList.add('hidden');
+			showSection('system-overview');
 
 			basicAuthHeader = null;
 			wsAuthMsg = null;
@@ -1024,6 +1060,30 @@
 			}
 		});
 
+		// --- Sidebar navigation ---
+		const SECTIONS = ['system-overview', 'host-console', 'bmc-shell', 'power-control', 'bmc', 'sensors'];
+
+		function showSection(name) {
+			SECTIONS.forEach(s => document.getElementById('section-' + s).classList.add('hidden'));
+			document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+			document.getElementById('section-' + name).classList.remove('hidden');
+			const item = document.querySelector(`.sidebar-item[data-section="${name}"]`);
+			if (item) item.classList.add('active');
+
+			if (name === 'host-console' && !hostWsConsole) {
+				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+				const wsUrl = `${socketProtocol}//${window.location.host}/console/host`;
+				hostWsConsole = new WSConsole(wsUrl, document.getElementById('host-terminal-container'), 'Host Serial Console', null);
+			} else if (name === 'bmc-shell' && !bmcWsConsole) {
+				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+				const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
+				const promptString = '\x1b[1;32mWelcome to WallaBMC 🦘\x1b[0m\n\x1b[1;32mbmc:~$\x1b[0m ';
+				bmcWsConsole = new WSConsole(wsUrl, document.getElementById('bmc-terminal-container'), 'WallaBMC Shell', promptString);
+			}
+			if (name === 'host-console' && hostWsConsole) hostWsConsole.term.focus();
+			if (name === 'bmc-shell' && bmcWsConsole) bmcWsConsole.term.focus();
+		}
+
 		// --- Terminal Handling ---
 		class WSConsole {
 			constructor(wsUrl, htmlContainer, nameString, promptString) {
@@ -1034,11 +1094,11 @@
 						cursorBlink: true,
 						theme: { background: '#000000' },
 				});
-				const fitAddon = new FitAddon.FitAddon();
-				this.term.loadAddon(fitAddon);
+				this.fitAddon = new FitAddon.FitAddon();
+				this.term.loadAddon(this.fitAddon);
 
 				this.term.open(htmlContainer);
-				fitAddon.fit();
+				this.fitAddon.fit();
 
 				this.term.write(`Connecting to ${nameString}...`);
 
@@ -1071,43 +1131,7 @@
 		let hostWsConsole = null;
 		let bmcWsConsole = null;
 
-		function openTerminal(host) {
-			if (host)
-				document.getElementById('host-term-modal').classList.remove('hidden');
-			else
-				document.getElementById('bmc-term-modal').classList.remove('hidden');
-
-			if ((host && !hostWsConsole) || (!host && !bmcWsConsole)) {
-				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-				if (host) {
-					const wsUrl = `${socketProtocol}//${window.location.host}/console/host`;
-					const nameString = 'Host Serial Console';
-					const container = document.getElementById('host-terminal-container');
-					hostWsConsole = new WSConsole(wsUrl, container, nameString, null);
-				} else {
-					const wsUrl = `${socketProtocol}//${window.location.host}/console/bmc`;
-					const nameString = 'WallaBMC Shell';
-					const container = document.getElementById('bmc-terminal-container');
-					const promptString = '\x1b[1;32mWelcome to WallaBMC 🦘\x1b[0m\n\x1b[1;32mbmc:~$\x1b[0m ';
-					bmcWsConsole = new WSConsole(wsUrl, container, nameString, promptString);
-				}
-			}
-			if (host)
-				hostWsConsole.term.focus();
-			else
-				bmcWsConsole.term.focus();
-		}
-
-		function hideTerminal(host) {
-			if (host)
-				document.getElementById('host-term-modal').classList.add('hidden');
-			else
-				document.getElementById('bmc-term-modal').classList.add('hidden');
-		}
-
 		function closeTerminal(host) {
-			hideTerminal(host);
-
 			if (host) {
 				if (hostWsConsole) {
 					if (hostWsConsole.ws)
