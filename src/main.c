@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(wallabmc, LOG_LEVEL_INF);
 #include "console_bridge.h"
 #include "console_bridge_ws.h"
 #include "vpd.h"
+#include "git_sha.h"
 
 static bool boot_finished = false;
 
