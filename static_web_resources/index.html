@@ -360,6 +360,48 @@
 		.sidebar-item.active { background: var(--primary); color: white; font-weight: 600; }
 		.sidebar-item.active:hover { background: var(--primary-hover); color: white; }
 		.dashboard-content { flex: 1; min-width: 0; }
+
+		/* Mobile sidebar toggle */
+		.sidebar-toggle {
+			display: none;
+			background: transparent;
+			border: 1px solid var(--border);
+			color: var(--text-main);
+			width: auto;
+			padding: 0 10px;
+			font-size: 1.2rem;
+			line-height: 1;
+		}
+		.sidebar-toggle:hover { background: var(--bg); color: var(--text-main); }
+
+		/* Mobile sidebar overlay/backdrop */
+		.sidebar-overlay {
+			display: none;
+			position: fixed;
+			inset: 0;
+			background: rgba(0,0,0,0.4);
+			z-index: 99;
+		}
+		.sidebar-overlay.open { display: block; }
+
+		@media (max-width: 640px) {
+			body { padding: 10px; }
+			.sidebar-toggle { display: flex; align-items: center; }
+			.dashboard-layout { display: block; }
+			.sidebar {
+				position: fixed;
+				left: 0;
+				top: 0;
+				bottom: 0;
+				width: 220px;
+				z-index: 100;
+				border-radius: 0;
+				transform: translateX(-100%);
+				transition: transform 0.25s ease;
+				overflow-y: auto;
+			}
+			.sidebar.open { transform: translateX(0); }
+		}
 	</style>
 </head>
 <body>
@@ -387,10 +429,12 @@
 					<h1 style="font-size: 1.5rem; margin: 0; color: var(--dark);">WallaBMC Admin Dashboard</h1>
 				</div>
 				<div class="nav-actions">
+					<button class="sidebar-toggle secondary" onclick="toggleSidebar()">&#9776;</button>
 					<button class="secondary" onclick="logout()">Logout</button>
 				</div>
 			</div>
 
+			<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 			<div class="dashboard-layout">
 				<nav class="sidebar">
 					<a class="sidebar-item active" data-section="system-overview" href="#" onclick="showSection('system-overview'); return false;">System Overview</a>
@@ -1089,12 +1133,25 @@
 		// --- Sidebar navigation ---
 		const SECTIONS = ['system-overview', 'host-console', 'bmc-shell', 'power-control', 'bmc', 'sensors'];
 
+		function toggleSidebar() {
+			const sidebar = document.querySelector('.sidebar');
+			const overlay = document.getElementById('sidebar-overlay');
+			const open = sidebar.classList.toggle('open');
+			overlay.classList.toggle('open', open);
+		}
+
+		function closeSidebar() {
+			document.querySelector('.sidebar').classList.remove('open');
+			document.getElementById('sidebar-overlay').classList.remove('open');
+		}
+
 		function showSection(name) {
 			SECTIONS.forEach(s => document.getElementById('section-' + s).classList.add('hidden'));
 			document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
 			document.getElementById('section-' + name).classList.remove('hidden');
 			const item = document.querySelector(`.sidebar-item[data-section="${name}"]`);
 			if (item) item.classList.add('active');
+			closeSidebar();
 
 			if (name === 'host-console' && !hostWsConsole) {
 				const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
