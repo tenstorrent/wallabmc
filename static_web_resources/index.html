@@ -297,15 +297,10 @@
 		}
 		.term-header {
 			display: flex; justify-content: space-between; align-items: center;
-			padding: 10px 15px; background: #1f2937; color: #e5e7eb;
+			padding: 15px 15px; background: #1f2937; color: #e5e7eb;
 			font-family: monospace; font-size: 14px;
 			border-bottom: 1px solid #374151;
 		}
-		.term-controls button {
-			background: transparent; color: #9ca3af; font-size: 1.2rem;
-			padding: 0 5px; margin-left: 10px; width: auto; border: none;
-		}
-		.term-controls button:hover { color: white; background: transparent; }
 		.term-body { height: 500px; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
 
 		/* Sidebar layout */
@@ -404,9 +399,6 @@
 						<div class="term-window">
 							<div class="term-header">
 								<span>Host Serial Console</span>
-								<div class="term-controls">
-									<button onclick="closeTerminal(true); showSection('system-overview');" title="Disconnect">&times;</button>
-								</div>
 							</div>
 							<div id="host-terminal-container" class="term-body"></div>
 						</div>
@@ -416,9 +408,6 @@
 						<div class="term-window">
 							<div class="term-header">
 								<span>BMC Shell</span>
-								<div class="term-controls">
-									<button onclick="closeTerminal(false); showSection('system-overview');" title="Disconnect">&times;</button>
-								</div>
 							</div>
 							<div id="bmc-terminal-container" class="term-body"></div>
 						</div>
