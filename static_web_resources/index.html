@@ -34,6 +34,79 @@
 			--input-height: 38px;     /* Enforced Height */
 		}
 
+		body.dark-mode {
+			--bg: #111827;
+			--card-bg: #1f2937;
+			--text-main: #f9fafb;
+			--text-muted: #9ca3af;
+			--border: #374151;
+			--dark: #e5e7eb;
+		}
+
+		body.dark-mode input,
+		body.dark-mode select {
+			background-color: #374151;
+			color: #f9fafb;
+		}
+
+		body.dark-mode button.secondary {
+			background: #374151;
+			color: #d1d5db;
+			border-color: #4b5563;
+		}
+		body.dark-mode button.secondary:hover {
+			background: #4b5563;
+			color: #f9fafb;
+		}
+
+		/* Dark mode toggle switch */
+		.toggle-switch {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			height: var(--input-height);
+		}
+		.toggle-switch input[type=checkbox] {
+			width: 40px;
+			height: 22px;
+			appearance: none;
+			background: var(--border);
+			border-radius: 11px;
+			border: 1px solid var(--border);
+			cursor: pointer;
+			position: relative;
+			transition: background 0.2s;
+			flex-shrink: 0;
+		}
+		.toggle-switch input[type=checkbox]::after {
+			content: '';
+			position: absolute;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: white;
+			top: 2px;
+			left: 2px;
+			transition: left 0.2s;
+		}
+		.toggle-switch input[type=checkbox]:checked {
+			background: var(--primary);
+			border-color: var(--primary);
+		}
+		.toggle-switch input[type=checkbox]:checked::after {
+			left: 20px;
+		}
+		.toggle-switch label {
+			font-size: 0.9rem;
+			color: var(--text-main);
+			cursor: pointer;
+			font-weight: normal;
+			text-transform: none;
+			letter-spacing: normal;
+			height: auto;
+			width: auto;
+		}
+
 		body {
 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 			background: var(--bg);
@@ -298,12 +371,22 @@
 			height: 550px; min-height: 200px; min-width: 400px;
 			position: relative;
 		}
+		body:not(.dark-mode) .term-window {
+			background: #f0f0f0;
+			border-color: var(--border);
+			box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+		}
 		.term-header {
 			display: flex; justify-content: space-between; align-items: center;
 			padding: 15px 15px; background: #1f2937; color: #e5e7eb;
 			font-family: monospace; font-size: 14px;
 			border-bottom: 1px solid #374151;
 			flex-shrink: 0;
+		}
+		body:not(.dark-mode) .term-header {
+			background: var(--card-bg);
+			color: var(--text-main);
+			border-bottom-color: var(--border);
 		}
 		.term-resize-corner {
 			position: absolute; bottom: 0; right: 0;
@@ -327,8 +410,17 @@
 		.term-font-controls select:focus, .term-font-controls input:focus {
 			border-color: #6b7280; outline: none; box-shadow: none;
 		}
+		body:not(.dark-mode) .term-font-controls select,
+		body:not(.dark-mode) .term-font-controls input {
+			background: var(--bg); color: var(--text-main); border-color: var(--border);
+		}
+		body:not(.dark-mode) .term-font-controls select:focus,
+		body:not(.dark-mode) .term-font-controls input:focus {
+			border-color: var(--primary);
+		}
 		.term-font-controls input[type=number] { width: 44px; }
-		.term-body { flex: 1; min-height: 0; width: 100%; padding: 5px; box-sizing: border-box; background: #000; }
+		.term-body { flex: 1; min-height: 0; width: 100%; padding: 5px; box-sizing: border-box; background: #000000; }
+		body:not(.dark-mode) .term-body { background: #fafafa; }
 
 		/* Sidebar layout */
 		.dashboard-layout {
@@ -531,6 +623,16 @@
 									<span class="data-value" id="bmc-zephyr-version">Loading...</span>
 								</div>
 							</div>
+							<h3>Appearance</h3>
+							<div class="grid-4-col">
+								<div class="info-item">
+									<span class="info-item-label">Theme</span>
+									<div class="toggle-switch">
+										<input type="checkbox" id="cfg-dark-mode" onchange="applyDarkMode(this.checked)">
+										<label for="cfg-dark-mode">Dark mode</label>
+									</div>
+								</div>
+							</div>
 							<h3>Security</h3>
 							<div class="grid-4-col">
 								<div class="info-item">
@@ -654,6 +756,53 @@
 
 		let refreshTimer = null;
 		let sensorsTimer = null;
+
+		// Terminal themes
+		const TERM_THEME_DARK = {
+			background: '#000000',
+			foreground: '#f8f8f2',
+			cursor:     '#f8f8f2',
+			black:      '#000000', brightBlack:   '#555555',
+			red:        '#ff5555', brightRed:     '#ff6e6e',
+			green:      '#50fa7b', brightGreen:   '#69ff94',
+			yellow:     '#f1fa8c', brightYellow:  '#ffffa5',
+			blue:       '#bd93f9', brightBlue:    '#d6acff',
+			magenta:    '#ff79c6', brightMagenta: '#ff92df',
+			cyan:       '#8be9fd', brightCyan:    '#a4ffff',
+			white:      '#bfbfbf', brightWhite:   '#ffffff',
+		};
+		const TERM_THEME_LIGHT = {
+			background: '#fafafa',
+			foreground: '#383a42',
+			cursor:     '#383a42',
+			black:      '#383a42', brightBlack:   '#4f525e',
+			red:        '#e45649', brightRed:     '#e45649',
+			green:      '#50a14f', brightGreen:   '#50a14f',
+			yellow:     '#c18401', brightYellow:  '#c18401',
+			blue:       '#0184bc', brightBlue:    '#0184bc',
+			magenta:    '#a626a4', brightMagenta: '#a626a4',
+			cyan:       '#0997b3', brightCyan:    '#0997b3',
+			white:      '#fafafa', brightWhite:   '#ffffff',
+		};
+
+		function getTermTheme() {
+			return document.body.classList.contains('dark-mode') ? TERM_THEME_DARK : TERM_THEME_LIGHT;
+		}
+
+		// Dark mode
+		function applyDarkMode(enabled) {
+			document.body.classList.toggle('dark-mode', enabled);
+			localStorage.setItem('dark-mode', enabled ? '1' : '0');
+			const toggle = document.getElementById('cfg-dark-mode');
+			if (toggle) toggle.checked = enabled;
+			const theme = enabled ? TERM_THEME_DARK : TERM_THEME_LIGHT;
+			[hostWsConsole, bmcWsConsole].forEach(c => { if (c) c.term.options.theme = theme; });
+		}
+
+		(function () {
+			const saved = localStorage.getItem('dark-mode');
+			if (saved === '1') document.body.classList.add('dark-mode');
+		})();
 
 		// UI Helpers
 		const show = (id) => document.getElementById(id).classList.remove('hidden');
@@ -1268,7 +1417,7 @@
 						shell: "linux",
 						convertEol: true,
 						cursorBlink: true,
-						theme: { background: '#000000' },
+						theme: getTermTheme(),
 						fontFamily: localStorage.getItem('term-font-family') || 'monospace',
 						fontSize:   WSConsole.getStoredFontSize(),
 				});
@@ -1352,6 +1501,9 @@
 		}
 
 		populateFontSelects();
+
+		// Sync dark mode toggle to saved state after DOM is ready
+		document.getElementById('cfg-dark-mode').checked = localStorage.getItem('dark-mode') === '1';
 	</script>
 </body>
 </html>
