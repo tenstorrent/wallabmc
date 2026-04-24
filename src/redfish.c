@@ -29,6 +29,7 @@
 #include "rtc.h"
 #include "sensors.h"
 #include "vpd.h"
+#include "git_sha.h"
 
 LOG_MODULE_REGISTER(redfish_app, CONFIG_LOG_DEFAULT_LEVEL);
 

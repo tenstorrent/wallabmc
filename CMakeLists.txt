@@ -17,26 +17,6 @@ else()
 	endif()
 endif()
 
-# Get project git SHA1 if not provided via CMake variable
-if(NOT DEFINED PROJECT_GIT_SHA)
-	# Use the shell script to get git SHA1
-	find_program(BASH_EXECUTABLE bash)
-	if(BASH_EXECUTABLE)
-		execute_process(
-			COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/get_project_git_sha.sh ${CMAKE_CURRENT_SOURCE_DIR}
-			OUTPUT_VARIABLE PROJECT_GIT_SHA
-			OUTPUT_STRIP_TRAILING_WHITESPACE
-			ERROR_QUIET
-		)
-	endif()
-	# Fallback to "unknown" if script didn't work
-	if(NOT DEFINED PROJECT_GIT_SHA OR PROJECT_GIT_SHA STREQUAL "")
-		set(PROJECT_GIT_SHA "unknown")
-	endif()
-endif()
-
-# Define project git SHA1 as compile-time string constant
-target_compile_definitions(app PRIVATE PROJECT_GIT_SHA="${PROJECT_GIT_SHA}")
 
 zephyr_linker_sources(SECTIONS sections-rom.ld)
 zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
@@ -50,6 +30,20 @@ zephyr_linker_section_ifdef(CONFIG_HTTP_SERVER
 
 # Used for webserver resources
 set(gen_dir ${ZEPHYR_BINARY_DIR}/include/generated/)
+
+# Generate git SHA header at build time so it stays current across commits
+find_program(BASH_EXECUTABLE bash)
+set(git_sha_header ${gen_dir}/git_sha.h)
+add_custom_target(app_git_sha ALL
+	COMMAND ${CMAKE_COMMAND}
+		-DBASH_EXECUTABLE=${BASH_EXECUTABLE}
+		-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+		-DOUTPUT_FILE=${git_sha_header}
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_git_sha.cmake
+	BYPRODUCTS ${git_sha_header}
+	COMMENT "Generating git SHA header"
+)
+add_dependencies(app app_git_sha)
 
 target_sources(app PRIVATE
 	src/config.c

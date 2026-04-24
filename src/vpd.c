@@ -11,6 +11,7 @@ LOG_MODULE_REGISTER(wallabmc_vpd, LOG_LEVEL_INF);
 #include <zephyr/version.h>
 
 #include "vpd.h"
+#include "git_sha.h"
 
 #ifdef CONFIG_SHELL
 #include <zephyr/shell/shell.h>
