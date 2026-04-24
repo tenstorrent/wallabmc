@@ -136,6 +136,16 @@ By submitting a contribution, you certify that:
 - The contribution is based on previous work covered by a compatible open source license, or
 - The contribution was provided to you by someone who certifies (a) or (b) and you're submitting it unmodified
 
+### AI Attribution
+
+Contributions which were developed using AI tools should include an Assisted-by tag in the following format:
+
+    Assisted-by: AGENT_NAME:MODEL_VERSION
+
+Where:
+ - `AGENT_NAME` is the name of the AI tool or framework
+ - `MODEL_VERSION` is the specific model version used, when it can be identified.
+
 ## Code of Conduct
 
 This project adheres to the Contributor Covenant Code of Conduct. By participating, you are expected to uphold this code. Please report unacceptable behavior to ospo@tenstorrent.com.
