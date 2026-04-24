@@ -31,7 +31,7 @@ WallaBMC currently supports the following hardware platforms:
 
 ### Screenshot
 
-The current web interface is shown below, click to enlarge.
+The main page of the web interface is shown below, click to enlarge.
 
 [![Web UI screenshot](img/web-ui-thumbnail.png)](img/web-ui.png)
 
