@@ -772,6 +772,8 @@ struct redfish_account {
 	const char *name;
 	const char *user_name;
 	const char *password; // Write-only
+	const char *account_types[1];
+	size_t account_types_count;
 };
 static const struct json_obj_descr account_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "@odata.id", odata_id, JSON_TOK_STRING),
@@ -782,6 +784,8 @@ static const struct json_obj_descr account_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "UserName", user_name, JSON_TOK_STRING),
 	// Password is usually not returned in GET, but we need descriptor for PATCH parsing
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_account, "Password", password, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_ARRAY_NAMED(struct redfish_account, "AccountTypes", account_types,
+				   1, account_types_count, JSON_TOK_STRING),
 };
 
 /* PATCH /redfish/v1/AccountService/Account/1 */
@@ -822,6 +826,8 @@ static int account_get_handler(struct http_resource_user_data *user_data)
 		 * ("") instead of null. That causes redfish validation to complain,
 		 * but it shouldn't be a big deal.
 		 */
+		.account_types = { "Redfish" },
+		.account_types_count = 1,
 	};
 	int ret;
 
