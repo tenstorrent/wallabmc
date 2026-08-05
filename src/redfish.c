@@ -464,6 +464,7 @@ struct redfish_service_root {
 	struct redfish_link account_service;
 	struct redfish_link systems;
 	struct redfish_link managers;
+	struct redfish_link chassis;
 };
 static const struct json_obj_descr service_root_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
@@ -484,6 +485,8 @@ static const struct json_obj_descr service_root_descr[] = {
 				    managers, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
 				    systems, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Chassis",
+				    chassis, link_descr),
 };
 
 /* GET /redfish/v1/ */
@@ -504,6 +507,9 @@ static int service_root_get_handler(struct http_resource_user_data *user_data)
 		},
 		.systems = {
 			.odata_id = "/redfish/v1/Systems"
+		},
+		.chassis = {
+			.odata_id = "/redfish/v1/Chassis"
 		},
 	};
 	int ret;
