@@ -152,6 +152,8 @@ jsonpath "$['@odata.id']" == "/redfish/v1/AccountService/Accounts/1"
 jsonpath "$['@odata.type']" == "#ManagerAccount.v1_9_0.ManagerAccount"
 jsonpath "$.Id" == "1"
 jsonpath "$.UserName" == "admin"
+jsonpath "$.AccountTypes" count == 1
+jsonpath "$.AccountTypes[0]" == "Redfish"
 
 GET http://192.168.1.110/redfish/v1/SessionService
 HTTP 200
