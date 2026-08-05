@@ -879,9 +879,13 @@ REDFISH_HANDLER(managers_collection, "/redfish/v1/Managers",
 
 /*** /redfish/v1/Managers/bmc ***/
 struct redfish_manager_oem_wallabmc {
+	const char *odata_type;
 	const char *zephyr_version;
 };
 static const struct json_obj_descr manager_oem_wallabmc_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager_oem_wallabmc,
+				   "@odata.type", odata_type,
+				   JSON_TOK_STRING),
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_manager_oem_wallabmc,
 				   "ZephyrVersion", zephyr_version,
 				   JSON_TOK_STRING),
@@ -964,7 +968,10 @@ static int manager_get_handler(struct http_resource_user_data *user_data)
 		.name = "WallaBMC",
 		.date_time = get_iso_time(),
 		.firmware_version = PROJECT_GIT_SHA,
-		.oem = { .wallabmc = { .zephyr_version = BANNER_VERSION } },
+		.oem = { .wallabmc = {
+			.odata_type = "#WallaBMC.v1_0_0.WallaBMC",
+			.zephyr_version = BANNER_VERSION,
+		} },
 		.ethernet_interfaces = {
 			.odata_id = "/redfish/v1/Managers/bmc/EthernetInterfaces",
 		},
