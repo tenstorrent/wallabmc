@@ -13,9 +13,11 @@ HTTP 200
 [Asserts]
 header "Content-Type" == "application/json"
 jsonpath "$.AccountService['@odata.id']" == "/redfish/v1/AccountService"
+jsonpath "$.SessionService['@odata.id']" == "/redfish/v1/SessionService"
 jsonpath "$.Managers['@odata.id']" == "/redfish/v1/Managers"
 jsonpath "$.Systems['@odata.id']" == "/redfish/v1/Systems"
 jsonpath "$.Chassis['@odata.id']" == "/redfish/v1/Chassis"
+jsonpath "$.Links.Sessions['@odata.id']" == "/redfish/v1/SessionService/Sessions"
 
 GET http://192.168.1.110/redfish/v1/
 HTTP 200
@@ -150,6 +152,23 @@ jsonpath "$['@odata.id']" == "/redfish/v1/AccountService/Accounts/1"
 jsonpath "$['@odata.type']" == "#ManagerAccount.v1_9_0.ManagerAccount"
 jsonpath "$.Id" == "1"
 jsonpath "$.UserName" == "admin"
+
+GET http://192.168.1.110/redfish/v1/SessionService
+HTTP 200
+[Asserts]
+header "Content-Type" == "application/json"
+jsonpath "$['@odata.id']" == "/redfish/v1/SessionService"
+jsonpath "$['@odata.type']" == "#SessionService.v1_1_9.SessionService"
+jsonpath "$.Id" == "SessionService"
+jsonpath "$.Sessions['@odata.id']" == "/redfish/v1/SessionService/Sessions"
+
+GET http://192.168.1.110/redfish/v1/SessionService/Sessions
+HTTP 200
+[Asserts]
+header "Content-Type" == "application/json"
+jsonpath "$['@odata.id']" == "/redfish/v1/SessionService/Sessions"
+jsonpath "$['@odata.type']" == "#SessionCollection.SessionCollection"
+jsonpath "$.Members" count == 0
 
 GET http://192.168.1.110/redfish/v1/Managers
 HTTP 200
