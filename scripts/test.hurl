@@ -189,6 +189,7 @@ jsonpath "$['@odata.type']" == "#Manager.v1_11_0.Manager"
 jsonpath "$.Id" == "bmc"
 jsonpath "$.DateTime" exists
 jsonpath "$.FirmwareVersion" exists
+jsonpath "$.Oem.WallaBMC['@odata.type']" == "#WallaBMC.v1_0_0.WallaBMC"
 
 GET http://192.168.1.110/redfish/v1/Managers/bmc/EthernetInterfaces
 HTTP 200
