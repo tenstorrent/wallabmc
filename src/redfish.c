@@ -1826,7 +1826,7 @@ static int sensor_temp_bmc_get_handler(struct http_resource_user_data *user_data
 		.reading = 40,
 		.reading_type = "Temperature",
 		.reading_units = "Cel",
-		.physical_context = "ManagementController",
+		.physical_context = "Manager",
 	};
 	struct sensor_value val;
 	int ret;
