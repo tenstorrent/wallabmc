@@ -454,6 +454,15 @@ REDFISH_HANDLER(redfish_version, "/redfish/",
 ALL_HTTP_RESOURCE_DEFINE(redfish_version_no_slash, "/redfish", &redfish_version_detail);
 
 /*** /redfish/v1/ ***/
+/* ServiceRoot Links (Sessions is mandatory per the ServiceRoot schema) */
+struct redfish_service_root_links {
+	struct redfish_link sessions;
+};
+static const struct json_obj_descr service_root_links_descr[] = {
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root_links, "Sessions",
+				    sessions, link_descr),
+};
+
 struct redfish_service_root {
 	const char *odata_type;
 	const char *odata_id;
@@ -462,9 +471,11 @@ struct redfish_service_root {
 	const char *redfish_version;
 	const char *uuid;
 	struct redfish_link account_service;
+	struct redfish_link session_service;
 	struct redfish_link systems;
 	struct redfish_link managers;
 	struct redfish_link chassis;
+	struct redfish_service_root_links links;
 };
 static const struct json_obj_descr service_root_descr[] = {
 	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_service_root, "@odata.type",
@@ -481,12 +492,16 @@ static const struct json_obj_descr service_root_descr[] = {
 				  uuid, JSON_TOK_STRING),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "AccountService",
 				    account_service, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "SessionService",
+				    session_service, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Managers",
 				    managers, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Systems",
 				    systems, link_descr),
 	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Chassis",
 				    chassis, link_descr),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_service_root, "Links",
+				    links, service_root_links_descr),
 };
 
 /* GET /redfish/v1/ */
@@ -502,6 +517,9 @@ static int service_root_get_handler(struct http_resource_user_data *user_data)
 		.account_service = {
 			.odata_id = "/redfish/v1/AccountService"
 		},
+		.session_service = {
+			.odata_id = "/redfish/v1/SessionService"
+		},
 		.managers = {
 			.odata_id = "/redfish/v1/Managers"
 		},
@@ -510,6 +528,11 @@ static int service_root_get_handler(struct http_resource_user_data *user_data)
 		},
 		.chassis = {
 			.odata_id = "/redfish/v1/Chassis"
+		},
+		.links = {
+			.sessions = {
+				.odata_id = "/redfish/v1/SessionService/Sessions"
+			},
 		},
 	};
 	int ret;
@@ -528,6 +551,81 @@ REDFISH_HANDLER(service_root, "/redfish/v1/",
 		false, /* do not require auth */
 		service_root_get_handler, NULL, NULL);
 ALL_HTTP_RESOURCE_DEFINE(service_root_no_slash, "/redfish/v1", &service_root_detail);
+
+/*** /redfish/v1/SessionService ***/
+struct redfish_session_service {
+	const char *odata_id;
+	const char *odata_type;
+	const char *id;
+	const char *name;
+	struct redfish_link sessions;
+};
+static const struct json_obj_descr session_service_descr[] = {
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_session_service, "@odata.id", odata_id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_session_service, "@odata.type", odata_type, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_session_service, "Id", id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM_NAMED(struct redfish_session_service, "Name", name, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_OBJECT_NAMED(struct redfish_session_service, "Sessions", sessions, link_descr),
+};
+
+/* GET /redfish/v1/SessionService */
+static int session_service_get_handler(struct http_resource_user_data *user_data)
+{
+	const struct redfish_session_service session_service = {
+		.odata_id = "/redfish/v1/SessionService",
+		.odata_type = "#SessionService.v1_1_9.SessionService",
+		.id = "SessionService",
+		.name = "Session Service",
+		.sessions = {
+			.odata_id = "/redfish/v1/SessionService/Sessions",
+		},
+	};
+	int ret;
+
+	ret = json_obj_encode(session_service_descr, ARRAY_SIZE(session_service_descr),
+				&session_service, user_data_json_append, user_data);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode session service: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(session_service, "/redfish/v1/SessionService",
+		false, /* do not require auth */
+		session_service_get_handler, NULL, NULL);
+
+/*** /redfish/v1/SessionService/Sessions ***/
+/*
+ * WallaBMC uses HTTP Basic auth and has no active sessions, so this is an
+ * empty (but schema-valid) SessionCollection.
+ */
+/* GET /redfish/v1/SessionService/Sessions */
+static int sessions_collection_get_handler(struct http_resource_user_data *user_data)
+{
+	const struct redfish_collection sessions_collection = {
+		.odata_id = "/redfish/v1/SessionService/Sessions",
+		.odata_type = "#SessionCollection.SessionCollection",
+		.name = "Session Collection",
+		.members_count = 0,
+		.members_len = 0,
+	};
+	int ret;
+
+	ret = json_obj_encode(collection_descr, ARRAY_SIZE(collection_descr),
+				&sessions_collection, user_data_json_append, user_data);
+	if (ret < 0) {
+		LOG_ERR("Failed to encode sessions collection: %d", ret);
+		return HTTP_500_INTERNAL_SERVER_ERROR;
+	}
+
+	return 0;
+}
+
+REDFISH_HANDLER(sessions_collection, "/redfish/v1/SessionService/Sessions",
+		true, /* require auth */
+		sessions_collection_get_handler, NULL, NULL);
 
 
 /*** /redfish/v1/odata ***/
