@@ -247,6 +247,7 @@ jsonpath "$['@odata.id']" == "/redfish/v1/Chassis/1/Sensors/TempBmc"
 jsonpath "$['@odata.type']" == "#Sensor.v1_2_0.Sensor"
 jsonpath "$.Id" == "TempBmc"
 jsonpath "$.ReadingType" == "Temperature"
+jsonpath "$.PhysicalContext" == "Manager"
 
 # --- Error / method handling ---
 
